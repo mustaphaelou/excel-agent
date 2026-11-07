@@ -19,6 +19,8 @@ Excel  ──►  "Agent" ribbon tab  ──►  chat panel (VBA UserForm)
                              edits queued ──► Apply / Discard
 ```
 
+> **Planning:** the Claude-for-Excel-style Office.js rewrite is charted in the [wayfinder map](https://github.com/mustaphaelou/excel-agent/issues/1). Research fact sheets live in [`docs/wayfinder/`](docs/wayfinder/).
+
 ## Using it
 
 1. Restart Excel (close every Excel window, reopen). The ribbon tab **Agent**
