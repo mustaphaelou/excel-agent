@@ -611,7 +611,7 @@ app/
 
 ## 14. Annotated wireframes
 
-Open [08-wireframes.html](08-wireframes.html); a flat preview is [08-sheet-preview.jpg](assets/08-sheet-preview.jpg). The sheet contains:
+Open [08-wireframes.html](08-wireframes.html). Quick view: [contact sheet of all eight frames](assets/08-sheet-contact.jpg). Full sheet: [08-sheet-preview.jpg](assets/08-sheet-preview.jpg). The sheet contains:
 
 1. **First run** — header, greeting, three suggestions, trust line, focused composer.
 2. **Streaming answer** — status line, markdown, table, inline citations, stop.
