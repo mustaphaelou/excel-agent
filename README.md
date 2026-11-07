@@ -19,7 +19,7 @@ Excel  ──►  "Agent" ribbon tab  ──►  chat panel (VBA UserForm)
                              edits queued ──► Apply / Discard
 ```
 
-> **Planning:** the Claude-for-Excel-style Office.js rewrite is charted in the [wayfinder map](https://github.com/mustaphaelou/excel-agent/issues/1). Research fact sheets live in [`docs/wayfinder/`](docs/wayfinder/).
+> **Planning:** the Claude-for-Excel-style Office.js rewrite is charted in the [wayfinder map](https://github.com/mustaphaelou/excel-agent/issues/1). Its runtime is decided in [ADR 0001](docs/adr/0001-runtime-topology.md): one local Node origin serves the pane and API, with the agent loop in the pane. Research fact sheets live in [`docs/wayfinder/`](docs/wayfinder/).
 
 ## Using it
 
