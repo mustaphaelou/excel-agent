@@ -1,0 +1,203 @@
+{
+  "receivedAt": "2026-11-07T21:34:17.046Z",
+  "report": {
+    "startedAt": "2026-11-07T21:34:14.224Z",
+    "url": "https://localhost:3000/taskpane.html?_host_Info=Excel$Win32$16.01$en-US$$$$0",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36 Edg/157.0.0.0",
+    "diagnostics": {
+      "host": "Excel",
+      "platform": "PC",
+      "version": "16.0.20527.20112",
+      "raw": {
+        "host": "Excel",
+        "version": "16.0.20527.20112",
+        "platform": "PC"
+      }
+    },
+    "requirementSets": {
+      "ExcelApi 1.21": {
+        "supported": true
+      },
+      "ExcelApi 1.20": {
+        "supported": true
+      },
+      "ExcelApiDesktop 1.1": {
+        "supported": true
+      },
+      "TaskPaneApi 1.1": {
+        "supported": true
+      },
+      "SharedRuntime 1.1": {
+        "supported": true
+      },
+      "SharedRuntime 1.2": {
+        "supported": true
+      }
+    },
+    "health": {
+      "ok": true,
+      "status": 200,
+      "body": {
+        "ok": true,
+        "pid": 28352,
+        "startedAt": "2026-11-07T21:32:42.271Z",
+        "port": 3000,
+        "uptimeSeconds": 92
+      },
+      "ms": 20
+    },
+    "activeRange": {
+      "worksheet": "Sheet1",
+      "address": "Sheet1!A1",
+      "value": "",
+      "values": [
+        [
+          ""
+        ]
+      ],
+      "text": [
+        [
+          ""
+        ]
+      ],
+      "rows": 1,
+      "cols": 1
+    },
+    "selectA1": {
+      "ok": true,
+      "selected": "Sheet1!A1"
+    },
+    "width": {
+      "api": "Office.extensionLifeCycle.taskpane.setWidth",
+      "setWidth": true,
+      "requested": 400,
+      "before": 326,
+      "after": 376,
+      "elapsed": 812,
+      "error": null
+    },
+    "hiddenSheet": {
+      "create": {
+        "ok": true
+      },
+      "select": {
+        "ok": false,
+        "error": {
+          "name": "RichApi.Error",
+          "code": "InvalidSelection",
+          "message": "The current selection is invalid for this operation.",
+          "debugInfo": {
+            "code": "InvalidSelection",
+            "message": "The current selection is invalid for this operation.",
+            "errorLocation": "Range.select",
+            "statement": "range.select();",
+            "surroundingStatements": [
+              "var workbook = context.workbook;",
+              "var worksheets = workbook.worksheets;",
+              "var worksheet = worksheets.getItem(...);",
+              "var range = worksheet.getRange(...);",
+              "// Instantiate {range}",
+              "// >>>>>",
+              "range.select();",
+              "// <<<<<"
+            ],
+            "fullStatements": [
+              "Please enable config.extendedErrorLogging to see full statements."
+            ]
+          }
+        }
+      },
+      "selectionAfter": "Sheet1!A1",
+      "activate": {
+        "ok": false,
+        "error": {
+          "name": "RichApi.Error",
+          "code": "InvalidReference",
+          "message": "This reference is invalid for the current operation.",
+          "debugInfo": {
+            "code": "InvalidReference",
+            "message": "This reference is invalid for the current operation.",
+            "errorLocation": "Worksheet.activate",
+            "statement": "worksheet.activate();",
+            "surroundingStatements": [
+              "var workbook = context.workbook;",
+              "var worksheets = workbook.worksheets;",
+              "var worksheet = worksheets.getItem(...);",
+              "// >>>>>",
+              "worksheet.activate();",
+              "// <<<<<"
+            ],
+            "fullStatements": [
+              "Please enable config.extendedErrorLogging to see full statements."
+            ]
+          }
+        }
+      },
+      "activeAfter": "Sheet1",
+      "cleanup": {
+        "ok": true
+      }
+    },
+    "partialApply": {
+      "persisted": true,
+      "value": "write-before-failure",
+      "error": {
+        "name": "RichApi.Error",
+        "code": "ItemNotFound",
+        "message": "The requested resource doesn't exist.",
+        "debugInfo": {
+          "code": "ItemNotFound",
+          "message": "The requested resource doesn't exist.",
+          "errorLocation": "WorksheetCollection.getItem",
+          "statement": "var worksheet = worksheets.getItem(...);",
+          "surroundingStatements": [
+            "var workbook = context.workbook;",
+            "var worksheets = workbook.worksheets;",
+            "// >>>>>",
+            "var worksheet = worksheets.getItem(...);",
+            "// <<<<<",
+            "var range = worksheet.getRange(...);",
+            "// Instantiate {range}",
+            "range.values = ...;"
+          ],
+          "fullStatements": [
+            "Please enable config.extendedErrorLogging to see full statements."
+          ]
+        }
+      }
+    },
+    "stream": {
+      "ok": true,
+      "status": 200,
+      "contentType": "text/event-stream; charset=utf-8",
+      "events": 6,
+      "first": {
+        "i": 1,
+        "prompt": "spike #6",
+        "at": "2026-11-07T21:34:15.745Z",
+        "text": "chunk 1 of 6"
+      },
+      "last": {
+        "i": 6,
+        "prompt": "spike #6",
+        "at": "2026-11-07T21:34:17.039Z",
+        "text": "chunk 6 of 6"
+      },
+      "done": {
+        "ok": true,
+        "events": 6
+      },
+      "bytes": 630,
+      "ms": 1557
+    },
+    "errors": [],
+    "onReady": {
+      "host": "Excel",
+      "platform": "PC"
+    },
+    "finishedAt": "2026-11-07T21:34:17.042Z",
+    "innerWidth": 376,
+    "outerWidth": 376,
+    "readyState": "complete"
+  }
+}

@@ -1,0 +1,29 @@
+﻿=== Certificate ===
+CA subject: CN=Excel Agent Spike Dev CA
+CA thumbprint: F49DC8FFB539D8FA73C5324C051BD5D1B252E1F6
+CA notAfter: 2036-11-07 21:13:14Z
+CA store: CurrentUser\Root
+Leaf subject: CN=localhost
+Leaf thumbprint: F06618D4608D20CFDB9D0A65E764D713B6726315
+Leaf notAfter: 2029-02-09 21:13:26Z
+Leaf SAN: DNS Name=localhost, IP Address=127.0.0.1, IP Address=0000:0000:0000:0000:0000:0000:0000:0001
+Leaf EKU: Server Authentication (1.3.6.1.5.5.7.3.1)
+PFX: C:\Users\musta\AppData\Local\ExcelAgentSpike\cert\server.pfx
+
+=== Task Scheduler ===
+TaskName:                             \ExcelAgentSpikeBackend
+Status:                               Running
+Last Run Time:                        11/7/2026 9:38:36 PM
+Last Result:                          267009
+Task To Run:                          C:\Users\musta\AppData\Local\ExcelAgentSpike\run-backend.cmd 
+Run As User:                          musta
+Schedule Type:                        At logon time
+
+=== Backend health ===
+{
+  "ok": true,
+  "pid": 3136,
+  "startedAt": "2026-11-07T21:38:37.373Z",
+  "port": 3000,
+  "uptimeSeconds": 72
+}
