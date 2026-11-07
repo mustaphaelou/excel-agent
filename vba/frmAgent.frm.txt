@@ -1,0 +1,574 @@
+Option Explicit
+'==============================================================================
+' frmAgent - the chat panel (code behind a blank UserForm designer).
+'
+' Controls are created at runtime in UserForm_Initialize and wired through
+' WithEvents. The designer stays empty; this module owns the UI and renders
+' TurnResult. Conversation state lives in Turn.bas.
+'
+' Sizing: the form is given real resize edges in UserForm_Activate (see
+' modWindow). MSForms does not reliably raise UserForm_Resize when the user
+' drags a border, so the layout is also re-checked once a second by
+' modAgent's OnTime loop - ApplyLayout is idempotent and cheap.
+'==============================================================================
+
+Private WithEvents txtLog As MSForms.TextBox
+Private WithEvents txtInput As MSForms.TextBox
+Private WithEvents cmdSend As MSForms.CommandButton
+Private WithEvents cmdApply As MSForms.CommandButton
+Private WithEvents cmdDiscard As MSForms.CommandButton
+Private WithEvents cmdNew As MSForms.CommandButton
+Private WithEvents chkConfirm As MSForms.CheckBox
+Private WithEvents chkReadOnly As MSForms.CheckBox
+Private WithEvents cboModel As MSForms.ComboBox
+Private lblStatus As MSForms.Label
+Private lblModel As MSForms.Label
+Private lblHelp As MSForms.Label
+
+Private mBusy As Boolean
+Private mInLayout As Boolean
+Private mStyled As Boolean
+Private mModelInit As Boolean
+Private mLastW As Single
+Private mLastH As Single
+
+'--- layout metrics (points) ---------------------------------------------------
+Private Const MARGIN As Single = 8
+Private Const HEADER_H As Single = 22
+Private Const STATUS_H As Single = 13
+Private Const INPUT_H As Single = 54
+Private Const BTN_H As Single = 24
+Private Const CHECK_H As Single = 16
+Private Const HELP_H As Single = 12
+Private Const GAP As Single = 4
+Private Const MODEL_W As Single = 156
+Private Const MODEL_W_MIN As Single = 128
+Private Const MIN_W As Single = 380
+Private Const MIN_H As Single = 340
+
+Public ResizableApplied As Boolean
+
+'==============================================================================
+' Construction
+'==============================================================================
+Private Sub UserForm_Initialize()
+    Me.Caption = "Excel Agent"
+    Me.Width = 442
+    Me.Height = 566
+    Me.BackColor = &HEEEEEE
+
+    Set lblStatus = Me.Controls.Add("Forms.Label.1", "lblStatus", True)
+    With lblStatus
+        .Left = MARGIN: .Top = 10: .Width = 318: .Height = STATUS_H
+        .Caption = APP_NAME & " - starting..."
+        .Font.Size = 8
+        .ForeColor = &H505050
+    End With
+
+    ' Model picker: filled from the local catalog immediately, then refreshed
+    ' from the bridge a second after the panel is up (see ScheduleModelRefresh).
+    EnsureModels
+
+    Set lblModel = Me.Controls.Add("Forms.Label.1", "lblModel", True)
+    With lblModel
+        .Left = 300: .Top = 10: .Width = 36: .Height = STATUS_H
+        .Caption = "Model:"
+        .Font.Size = 8
+        .ForeColor = &H505050
+        .TextAlign = 3              ' fmTextAlignRight
+    End With
+
+    Set cboModel = Me.Controls.Add("Forms.ComboBox.1", "cboModel", True)
+    With cboModel
+        .Left = 342: .Top = 6: .Width = 84: .Height = 20
+        .Style = 2                  ' fmStyleDropDownList - no free typing
+        .Font.Size = 8
+        .ListRows = 14
+        .BackColor = &HFFFFFF
+        .ControlTipText = "Model used for new messages"
+    End With
+    RefreshModelCombo
+
+    Set txtLog = Me.Controls.Add("Forms.TextBox.1", "txtLog", True)
+    With txtLog
+        .Left = MARGIN: .Top = 24: .Width = 418: .Height = 360
+        .MultiLine = True
+        .WordWrap = True
+        .ScrollBars = 2
+        .Locked = True
+        .BackColor = &HFFFFFF
+        .Font.Name = "Consolas"
+        .Font.Size = 9
+    End With
+
+    Set txtInput = Me.Controls.Add("Forms.TextBox.1", "txtInput", True)
+    With txtInput
+        .Left = MARGIN: .Top = 392: .Width = 418: .Height = INPUT_H
+        .MultiLine = True
+        .WordWrap = True
+        .ScrollBars = 2
+        .EnterKeyBehavior = True
+        .Font.Name = "Segoe UI"
+        .Font.Size = 10
+        .BackColor = &HFFFFFF
+    End With
+
+    Set cmdSend = Me.Controls.Add("Forms.CommandButton.1", "cmdSend", True)
+    With cmdSend
+        .Left = MARGIN: .Top = 450: .Width = 104: .Height = BTN_H
+        .Caption = "Send"
+        .Default = True
+    End With
+
+    Set cmdApply = Me.Controls.Add("Forms.CommandButton.1", "cmdApply", True)
+    With cmdApply
+        .Left = 116: .Top = 450: .Width = 84: .Height = BTN_H
+        .Caption = "Apply"
+        .Enabled = False
+    End With
+
+    Set cmdDiscard = Me.Controls.Add("Forms.CommandButton.1", "cmdDiscard", True)
+    With cmdDiscard
+        .Left = 204: .Top = 450: .Width = 84: .Height = BTN_H
+        .Caption = "Discard"
+        .Enabled = False
+    End With
+
+    Set cmdNew = Me.Controls.Add("Forms.CommandButton.1", "cmdNew", True)
+    With cmdNew
+        .Left = 292: .Top = 450: .Width = 134: .Height = BTN_H
+        .Caption = "Clear conversation"
+    End With
+
+    Set chkConfirm = Me.Controls.Add("Forms.CheckBox.1", "chkConfirm", True)
+    With chkConfirm
+        .Left = MARGIN: .Top = 480: .Width = 210: .Height = CHECK_H
+        .Caption = "Confirm edits before applying"
+        .Value = True
+        .Font.Size = 8
+    End With
+
+    Set chkReadOnly = Me.Controls.Add("Forms.CheckBox.1", "chkReadOnly", True)
+    With chkReadOnly
+        .Left = 226: .Top = 480: .Width = 120: .Height = CHECK_H
+        .Caption = "Read-only"
+        .Value = False
+        .Font.Size = 8
+    End With
+
+    Set lblHelp = Me.Controls.Add("Forms.Label.1", "lblHelp", True)
+    With lblHelp
+        .Left = MARGIN: .Top = 504: .Width = 418: .Height = HELP_H
+        .Caption = "Enter sends - Shift+Enter adds a line - paste a link and the agent reads it"
+        .Font.Size = 7
+        .ForeColor = &H808080
+    End With
+
+    If Turn.HistoryCount() > 0 Then
+        LogLine "(previous conversation retained - " & Turn.HistoryCount() & " messages)"
+    End If
+    If Turn.HasPending() Then
+        LogLine "(" & Turn.PendingCount() & " proposed edits still waiting - press Apply or Discard.)"
+        LogLine Turn.PendingSummary()
+        LogLine ""
+        cmdApply.Enabled = True
+        cmdDiscard.Enabled = True
+    End If
+    LogLine "Excel Agent is ready - model: " & ActiveModelLabel()
+    LogLine "Ask about this workbook in plain language, or ask it to change cells."
+    LogLine "Paste a link and the agent can read that page."
+    LogLine ""
+    If Turn.HasPending() Then
+        SetStatus "Edits pending."
+    Else
+        SetStatus "Idle. Type a request below."
+    End If
+End Sub
+
+' Once the window exists we can restyle it and lay it out properly.
+Private Sub UserForm_Activate()
+    If Not mStyled Then
+        mStyled = True
+        ResizableApplied = MakeResizable(Me.Caption)
+        RestoreSize
+    End If
+    ApplyLayout
+    StartLayoutLoop
+    ScheduleModelRefresh
+End Sub
+
+Private Sub UserForm_Resize()
+    If mInLayout Then Exit Sub
+    ApplyLayout
+End Sub
+
+'==============================================================================
+' Layout
+'==============================================================================
+Public Sub ApplyLayout()
+    Dim W As Single, H As Single
+    Dim yTop As Single, yBtn As Single, yChk As Single, yHelp As Single
+    Dim logH As Single, bw As Single
+    Dim modelW As Single, modelX As Single
+
+    If mInLayout Then Exit Sub
+    mInLayout = True
+    On Error Resume Next
+
+    ' never let the user shrink it into nonsense
+    If Me.InsideWidth < MIN_W Then Me.Width = Me.Width + (MIN_W - Me.InsideWidth)
+    If Me.InsideHeight < MIN_H Then Me.Height = Me.Height + (MIN_H - Me.InsideHeight)
+
+    W = Me.InsideWidth
+    H = Me.InsideHeight
+
+    modelW = MODEL_W
+    If W < 420 Then modelW = MODEL_W_MIN
+    modelX = W - MARGIN - modelW
+
+    yHelp = H - HELP_H - 4
+    yChk = yHelp - CHECK_H - GAP
+    yBtn = yChk - BTN_H - GAP
+    yTop = 6 + HEADER_H + GAP
+
+    logH = yBtn - INPUT_H - GAP - yTop
+    If logH < 80 Then logH = 80
+
+    lblStatus.Move MARGIN, 10, modelX - MARGIN - 42, STATUS_H
+    lblModel.Move modelX - 40, 10, 36, STATUS_H
+    cboModel.Move modelX, 6, modelW, 20
+    txtLog.Move MARGIN, yTop, W - 2 * MARGIN, logH
+    txtInput.Move MARGIN, yTop + logH + GAP, W - 2 * MARGIN, INPUT_H
+
+    cmdSend.Move MARGIN, yBtn, 104, BTN_H
+    cmdApply.Move MARGIN + 108, yBtn, 84, BTN_H
+    cmdDiscard.Move MARGIN + 196, yBtn, 84, BTN_H
+    bw = W - MARGIN - (MARGIN + 284)
+    If bw < 110 Then bw = 110
+    cmdNew.Move MARGIN + 284, yBtn, bw, BTN_H
+
+    chkConfirm.Move MARGIN, yChk, 210, CHECK_H
+    chkReadOnly.Move MARGIN + 218, yChk, 120, CHECK_H
+    lblHelp.Move MARGIN, yHelp, W - 2 * MARGIN, HELP_H
+
+    mLastW = Me.InsideWidth
+    mLastH = Me.InsideHeight
+    mInLayout = False
+    On Error GoTo 0
+End Sub
+
+' Called once a second by the add-in's timer loop.
+Public Sub CheckSize()
+    If mInLayout Then Exit Sub
+    If Abs(Me.InsideWidth - mLastW) > 0.5 Or Abs(Me.InsideHeight - mLastH) > 0.5 Then
+        ApplyLayout
+    End If
+End Sub
+
+' Used by the self-test: resize explicitly, then lay out.
+Public Sub ResizeTo(ByVal w As Single, ByVal h As Single)
+    Me.Width = w
+    Me.Height = h
+    ApplyLayout
+End Sub
+
+Public Property Get LogWidth() As Single
+    LogWidth = txtLog.Width
+End Property
+
+Public Property Get LogHeight() As Single
+    LogHeight = txtLog.Height
+End Property
+
+'==============================================================================
+' Size persistence
+'==============================================================================
+Private Sub RestoreSize()
+    Dim w As String, h As String
+    Dim wv As Single, hv As Single
+
+    w = GetSetting("ExcelAgent", "Panel", "Width", "")
+    h = GetSetting("ExcelAgent", "Panel", "Height", "")
+    wv = Val(w)
+    hv = Val(h)
+    If wv > MIN_W Then Me.Width = wv
+    If hv > MIN_H Then Me.Height = hv
+End Sub
+
+Private Sub SaveSize()
+    On Error Resume Next
+    SaveSetting "ExcelAgent", "Panel", "Width", CStr(Me.Width)
+    SaveSetting "ExcelAgent", "Panel", "Height", CStr(Me.Height)
+End Sub
+
+'==============================================================================
+' Public surface used by modAgent
+'==============================================================================
+Public Sub Prefill(ByVal text As String)
+    If mBusy Then Exit Sub
+    If Len(text) > 0 Then
+        txtInput.Text = text
+        txtInput.SetFocus
+        txtInput.SelStart = Len(txtInput.Text)
+    End If
+End Sub
+
+' Used by modAgent.AgentReset to avoid unloading the form mid-turn.
+Public Property Get Busy() As Boolean
+    Busy = mBusy
+End Property
+
+' Rebuilt after the bridge answers GET /models. Keeps the current selection.
+Public Sub RefreshModelCombo()
+    Dim i As Long, idx As Long, want As String
+
+    If cboModel Is Nothing Then Exit Sub
+    EnsureModels
+    want = ActiveModel()
+
+    mModelInit = True
+    On Error Resume Next
+    cboModel.Clear
+    For i = 1 To ModelCount()
+        cboModel.AddItem ModelLabelAt(i)
+    Next i
+    idx = ModelIndexById(want)
+    If idx = 0 Then idx = 1
+    If ModelCount() > 0 Then cboModel.ListIndex = idx - 1
+    cboModel.Enabled = Not mBusy
+    mModelInit = False
+    On Error GoTo 0
+End Sub
+
+Public Property Get ModelItemCount() As Long
+    ModelItemCount = ModelCount()
+End Property
+
+Public Property Get SelectedModelId() As String
+    SelectedModelId = ActiveModel()
+End Property
+
+Public Property Get ModelComboRect() As String
+    ModelComboRect = Int(cboModel.Left) & "," & Int(cboModel.Top) & " " & _
+                     Int(cboModel.Width) & "x" & Int(cboModel.Height)
+End Property
+
+Public Property Get ModelListIndex() As Long
+    ModelListIndex = cboModel.ListIndex
+End Property
+
+'==============================================================================
+' Events
+'==============================================================================
+Private Sub cmdSend_Click()
+    DoSend
+End Sub
+
+Private Sub txtInput_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    If KeyCode = 13 And Shift = 0 Then
+        KeyCode = 0
+        DoSend
+    End If
+End Sub
+
+Private Sub cmdApply_Click()
+    If mBusy Then Exit Sub
+    Dim res As String
+
+    mBusy = True
+    SetStatus "Applying edits..."
+    DoEvents
+    res = Turn.Apply()
+    LogLine res
+    LogLine ""
+
+    cmdApply.Enabled = Turn.HasPending()
+    cmdDiscard.Enabled = Turn.HasPending()
+    mBusy = False
+
+    If Turn.HasPending() Then
+        SetStatus "Some edits still pending."
+    Else
+        SetStatus "Done."
+    End If
+    ScrollLog
+End Sub
+
+Private Sub cmdDiscard_Click()
+    If mBusy Then Exit Sub
+    Turn.Discard
+    cmdApply.Enabled = False
+    cmdDiscard.Enabled = False
+    LogLine "(proposed edits discarded)"
+    LogLine ""
+    SetStatus "Discarded."
+    ScrollLog
+End Sub
+
+Private Sub cmdNew_Click()
+    If mBusy Then Exit Sub
+    Turn.Clear
+    txtLog.Text = ""
+    cmdApply.Enabled = False
+    cmdDiscard.Enabled = False
+    LogLine "Conversation cleared."
+    LogLine ""
+    SetStatus "Idle."
+End Sub
+
+Private Sub cboModel_Change()
+    Dim id As String
+    If mModelInit Then Exit Sub
+    On Error Resume Next
+    If cboModel.ListIndex < 0 Then Exit Sub
+    id = ModelIdAt(cboModel.ListIndex + 1)
+    If Len(id) = 0 Then Exit Sub
+    SetActiveModel id
+    LogLine "(model: " & ActiveModelLabel() & ")"
+    SetStatus "Model: " & ActiveModelLabel()
+    On Error GoTo 0
+End Sub
+
+Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    If mBusy Then
+        Cancel = 1
+        Exit Sub
+    End If
+    SaveSize
+End Sub
+
+Private Sub UserForm_Terminate()
+    SaveSize
+    StopLayoutLoop
+    FormClosed
+End Sub
+
+'==============================================================================
+' The turn
+'==============================================================================
+Private Sub DoSend()
+    Dim text As String
+    Dim result As TurnResult
+    Dim i As Long
+    Dim label As Variant
+    Dim note As Variant
+    Dim res As String
+
+    On Error GoTo Failed
+
+    If mBusy Then Exit Sub
+    text = Trim$(txtInput.Text)
+    If Len(text) = 0 Then Exit Sub
+
+    ' A new turn waits for the pending edits. Keep the typed text so the user
+    ' can send it after Apply or Discard.
+    If Turn.HasPending() Then
+        LogLine "Apply or discard the proposed edits first."
+        SetStatus "Edits pending."
+        ScrollLog
+        Exit Sub
+    End If
+
+    txtInput.Text = ""
+    LogLine "You: " & text
+
+    mBusy = True
+    cmdSend.Enabled = False
+    cmdApply.Enabled = False
+    cmdDiscard.Enabled = False
+    cmdNew.Enabled = False
+    If Not cboModel Is Nothing Then cboModel.Enabled = False
+
+    SetStatus "Working..."
+    DoEvents
+
+    Set result = Turn.Submit(text, (chkReadOnly.Value = True), ActiveModel())
+    If result Is Nothing Then
+        Set result = New TurnResult
+        result.ErrorText = "The turn did not return a result."
+    End If
+
+    If Not result.Ok Then
+        LogLine "[error] " & result.ErrorText
+        LogLine ""
+    Else
+        LogLine "Agent: " & result.Reply
+
+        For Each note In result.Notes
+            LogLine "  ! " & note
+        Next note
+
+        If result.Edits.Count > 0 Then
+            LogLine ""
+            LogLine "Proposed edits:"
+            i = 0
+            For Each label In result.Edits
+                i = i + 1
+                LogLine "  " & i & ". " & label
+            Next label
+
+            If chkConfirm.Value = True Then
+                LogLine ""
+                LogLine "Review, then press Apply (or Discard)."
+            Else
+                res = Turn.Apply()
+                LogLine ""
+                LogLine res
+            End If
+        End If
+        LogLine ""
+    End If
+
+    ' The first Send may have started the bridge, which is also the moment the
+    ' live model catalog becomes reachable. Refresh it once, in the background.
+    If result.Ok And Not ModelsFromBridge() Then ScheduleModelRefresh
+
+    cmdApply.Enabled = Turn.HasPending()
+    cmdDiscard.Enabled = Turn.HasPending()
+
+    mBusy = False
+    cmdSend.Enabled = True
+    cmdNew.Enabled = True
+    If Not cboModel Is Nothing Then cboModel.Enabled = True
+    If Turn.HasPending() Then
+        SetStatus "Edits pending."
+    ElseIf result.Ok Then
+        SetStatus "Ready."
+    Else
+        SetStatus "Error."
+    End If
+    ScrollLog
+    txtInput.SetFocus
+    Exit Sub
+
+Failed:
+    LogLine "[error] " & Err.Description
+    LogLine ""
+    mBusy = False
+    cmdSend.Enabled = True
+    cmdNew.Enabled = True
+    If Not cboModel Is Nothing Then cboModel.Enabled = True
+    cmdApply.Enabled = Turn.HasPending()
+    cmdDiscard.Enabled = Turn.HasPending()
+    SetStatus "Error."
+    ScrollLog
+End Sub
+
+'==============================================================================
+' Helpers
+'==============================================================================
+Private Sub LogLine(ByVal s As String)
+    txtLog.Text = txtLog.Text & s & vbCrLf
+End Sub
+
+Private Sub SetStatus(ByVal s As String)
+    On Error Resume Next
+    lblStatus.Caption = s
+End Sub
+
+Private Sub ScrollLog()
+    On Error Resume Next
+    txtLog.SetFocus
+    txtLog.SelStart = Len(txtLog.Text)
+    txtInput.SetFocus
+End Sub

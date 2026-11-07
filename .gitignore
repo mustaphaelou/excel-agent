@@ -1,0 +1,15 @@
+# Local wayfinder tracker (migrated to GitHub Issues)
+.scratch/
+
+# Python
+__pycache__/
+*.pyc
+
+# Logs and test traces
+*.log
+
+# Build artifacts and generated screenshots
+build/*.xlam
+build/*.raw.xlam
+build/*.png
+build/*.txt

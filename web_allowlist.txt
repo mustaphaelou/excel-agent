@@ -1,0 +1,11 @@
+# Excel Agent - hosts the agent may read from the web.
+#
+# One host per line. "*.example.com" also matches its subdomains.
+# If every line is blank or starts with '#', any PUBLIC host is allowed.
+# Private/local addresses (127.0.0.1, 10.x, 169.254.x, .local) are always
+# refused, even if listed here.
+#
+# This file is re-read on every request, so edits take effect immediately.
+#
+# example.com
+# *.wikipedia.org

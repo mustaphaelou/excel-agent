@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<customUI xmlns="http://schemas.microsoft.com/office/2009/07/customui">
+  <ribbon>
+    <tabs>
+      <tab id="tabExcelAgent" label="Agent">
+        <group id="grpExcelAgentChat" label="Assistant">
+          <button id="btnExcelAgentChat"
+                  label="Chat"
+                  size="large"
+                  onAction="AgentShow"
+                  screentip="Open the Excel Agent panel"
+                  supertip="Ask about this workbook in plain language. The agent can read what is on the sheets and propose cell edits you approve."/>
+          <button id="btnExcelAgentSelection"
+                  label="Ask about selection"
+                  size="large"
+                  onAction="AgentAskSelection"
+                  screentip="Ask about the selected cells"
+                  supertip="Opens the panel with a question about the current selection already drafted."/>
+          <button id="btnExcelAgentSummary"
+                  label="Summarise sheet"
+                  size="large"
+                  onAction="AgentSummarizeSheet"
+                  screentip="Summarise the active sheet"
+                  supertip="Asks the agent for a short summary of the active sheet."/>
+        </group>
+        <group id="grpExcelAgentSession" label="Session">
+          <button id="btnExcelAgentReset"
+                  label="Clear conversation"
+                  size="large"
+                  onAction="AgentReset"
+                  screentip="Forget the conversation"
+                  supertip="Clears the chat history and any pending edits. Sheet data is untouched."/>
+        </group>
+      </tab>
+    </tabs>
+  </ribbon>
+</customUI>
