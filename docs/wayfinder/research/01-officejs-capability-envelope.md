@@ -1,6 +1,6 @@
 # Office.js capability envelope — Excel 16.0 build 20527 (Windows)
 
-Ticket: [01 · Office.js capability envelope](../issues/01-officejs-capability-envelope.md)
+Ticket: [01 · Office.js capability envelope](https://github.com/mustaphaelou/excel-agent/issues/2)
 Target: Excel 16.0 (Microsoft 365), build 20527, Windows desktop.
 Method: Microsoft Learn only — Office Add-ins docs, the Office.js/Excel API reference, requirement-set and manifest reference, plus the Open XML `[MS-OWEXML]` spec. No blogs or secondary summaries. Version data read 2026-11-07.
 

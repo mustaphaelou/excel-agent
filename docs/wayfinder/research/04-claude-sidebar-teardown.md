@@ -1,6 +1,6 @@
 # Claude for Excel sidebar — interaction teardown
 
-Ticket: [`04-claude-sidebar-teardown`](../issues/04-claude-sidebar-teardown.md)
+Ticket: [`04-claude-sidebar-teardown`](https://github.com/mustaphaelou/excel-agent/issues/5)
 Researched: 2026-11-07 · Sources: Anthropic docs, Anthropic blog + newsroom, Anthropic help center (incl. an archived pre-GA version), Claude Academy, and official Anthropic screenshots/video.
 Third-party material was used only to *locate* official assets; no third-party claim stands on its own below.
 
