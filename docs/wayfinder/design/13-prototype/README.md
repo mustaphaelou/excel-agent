@@ -39,6 +39,14 @@ The preset is a starting point, not a lock. The prototype is clickable:
 
 `?width=260|380|520|720` changes the webview width; the pane is a container, so the layout reflows. `?theme=auto|light|dark` changes the pane and the mock host. Keyboard `←` / `→` cycles variants; `Esc` stops a stream or closes a menu/dialog.
 
+## Snapshots
+
+At 380 px / 1366 × 768, light:
+
+- [Hybrid — review](screenshots/hybrid-review.png)
+- [Claude-close — first run](screenshots/claude-empty.png)
+- [Fluent-native — review](screenshots/fluent-review.png)
+
 ## What to judge
 
 1. **Reading rhythm at 380 px** — does the warm paper + serif run-in + 14/22 body hold up with a table and citations in the same turn?
