@@ -2,6 +2,8 @@
 
 **Throwaway.** This directory is the primary source for the validated direction, not production code. No framework, no dependencies, no Office.js, no gateway, no persistence. Everything is mocked in the browser.
 
+> **Validated 2026-11-08:** the dev chose **B — Claude-close** as the visual direction. The prototype uses #8's accessible action token `#B55434` for filled actions; Claude's `#D97757` is the mark/illustration only. See [issue #13's Answer](https://github.com/mustaphaelou/excel-agent/issues/13).
+
 ## Run
 
 ```bash
@@ -19,7 +21,7 @@ npm start
 Which visual direction should the pane take, and which interaction patterns survive contact with a real, clickable conversation?
 
 - **A · Hybrid** (`?variant=hybrid`) — the #8 direction: warm paper reading column, Fluent geometry, inline expanded diff card. This is the primary candidate.
-- **B · Claude-close** (`?variant=claude`) — floating paper surface, editorial serif, right-aligned user bubbles, a large floating composer. Tests how much Claude is worth keeping.
+- **B · Claude-close** (`?variant=claude`) — **validated**: floating paper surface, editorial serif, right-aligned user bubbles, a large floating composer.
 - **C · Fluent-native** (`?variant=fluent`) — command bar, message avatars, denser type, Excel-blue action role, a review table instead of the diff card. Tests how much Excel should win.
 
 Variant keys are shareable and reload-stable. The floating bottom bar cycles them with the arrow buttons or `←` / `→` when focus is outside a field.

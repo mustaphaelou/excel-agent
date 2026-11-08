@@ -107,10 +107,12 @@ html[data-variant="claude"][data-theme="light"] {
   --line: #e9e4d8;
   --line-strong: #ded7c9;
   --line-control: #9a958a;
-  --accent: #d97757;
-  --accent-hover: #c46443;
+  --accent: #b55434;
+  --accent-hover: #9e4529;
   --accent-ink: #ffffff;
   --accent-soft: #f8e9e1;
+  --brand: #d97757;
+  --brand-hover: #c46443;
   --focus: #b55434;
   --cite-bg: #eff3f5;
   --cite-text: #3f6599;
@@ -146,6 +148,8 @@ html[data-variant="claude"][data-theme="dark"] {
   --accent-hover: #eda081;
   --accent-ink: #1f1e1b;
   --accent-soft: #3b2a23;
+  --brand: #e08a6c;
+  --brand-hover: #eda081;
   --focus: #f0b49b;
   --cite-bg: #1f2c35;
   --cite-text: #a8c4e3;
@@ -1366,7 +1370,8 @@ button.setting-row:hover { background: var(--paper-2); }
 .pane-view-claude .message-actions { margin-top: 2px; opacity: 0.7; }
 .pane-view-claude .assistant-turn:hover .message-actions { opacity: 1; }
 .pane-view-claude .empty-state { justify-content: center; align-items: center; text-align: center; padding: 8px 6px 0; }
-.pane-view-claude .empty-mark { width: 38px; height: 38px; border-radius: 12px; margin-bottom: 16px; background: var(--accent); color: var(--accent-ink); }
+.pane-view-claude .empty-mark { width: 38px; height: 38px; border-radius: 12px; margin-bottom: 16px; background: var(--brand); color: #fff; }
+html[data-variant="claude"][data-theme="dark"] .pane-view-claude .empty-mark { color: var(--accent-ink); }
 .pane-view-claude .empty-mark .icon { width: 19px; height: 19px; }
 .pane-view-claude .empty-state h1 { font-size: 27px; line-height: 33px; letter-spacing: -0.026em; margin-bottom: 8px; }
 .pane-view-claude .empty-state > p { font-size: 12.5px; line-height: 19px; max-width: 29em; }
