@@ -39,3 +39,15 @@ _Avoid_: reference, link
 **Session**:
 The conversation context owned by one pane instance, identified by a per-pane session id. It is not server state.
 _Avoid_: conversation (when the storage boundary matters)
+
+**Fake Excel**:
+The in-memory harness that implements the slice of `Excel.run`, `context.sync` and the `Office` globals the pane uses, so the agent loop and approval gate can run without Excel. It models workbook semantics, not Office.js.
+_Avoid_: mock, stub (when the harness as a whole is meant)
+
+**Golden fixture**:
+A committed expected output — a normalized gateway event sequence, or a test's reference snapshot — compared after volatile ids and timestamps are stripped. It is updated deliberately, never derived live from the code it checks.
+_Avoid_: snapshot (for gateway goldens), recording
+
+**Smoke run**:
+The manual, installed-build check at a phase gate: sideload, pane load, one read, one approved write, one citation jump, Stop and audit. It is the only test that exercises real Excel and WebView2.
+_Avoid_: e2e test, integration test

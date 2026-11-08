@@ -48,7 +48,7 @@ flowchart LR
   Server -->|"SSE relay"| Pane
 ```
 
-`/api/chat` is the only streaming route. The pane parses the OpenAI SSE frames (content deltas, tool-call deltas, `finish_reason`, the final usage chunk), executes any Excel tool calls, appends `role: "tool"` results, and posts the next request. Read tools run immediately; write tools wait for the pane's approval gate.
+`/api/chat` is the only streaming route. The server normalizes the gateway's OpenAI SSE frames into #12's small event stream (`start`, `text.delta`, `tool_call`, `usage`, `done`, `error`, `cancelled`); the pane consumes those events, executes any Excel tool calls, appends `role: "tool"` results, and posts the next request. Read tools run immediately; write tools wait for the pane's approval gate. This is #12's amendment to the earlier note that the pane parses raw frames; the topology is unchanged.
 
 Build and deploy:
 
@@ -99,5 +99,5 @@ flowchart LR
 - [#10 Workbook context and cell citations](https://github.com/mustaphaelou/excel-agent/issues/10) defines what the pane sends and how citations navigate.
 - [#11 Conversation, history and instructions](https://github.com/mustaphaelou/excel-agent/issues/11) decides where history lives and how a workbook is identified.
 - [#12 Agent protocol and Excel tool surface](https://github.com/mustaphaelou/excel-agent/issues/12) defines the tools, streaming parser details and model policy.
-- The test strategy graduates from the map's fog into its own ticket, blocked by #12.
+- The test strategy graduates from the map's fog into its own ticket, blocked by #12. Decided 2026-11-08: [#15](https://github.com/mustaphaelou/excel-agent/issues/15) / [15-test-strategy.md](../wayfinder/design/15-test-strategy.md); the harness is stood up in build phase 1.
 - The clickable prototype ([#13](https://github.com/mustaphaelou/excel-agent/issues/13)) uses this topology's build shape: static assets served by the local Node origin.
