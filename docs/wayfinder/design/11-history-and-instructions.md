@@ -20,6 +20,7 @@ A conversation belongs to a workbook and outlives the pane. The backend owns one
 | 8 | Compaction is user-initiated, behind a divider, originals kept | Silent in-place summarization is forbidden; auto-branching loses the thread |
 | 9 | Soft 250 MB budget, no silent deletion, delete-all plus export | A personal tool should not eat its own record |
 | 10 | Store failure degrades, never blocks the turn | Losing a turn to a disk hiccup is worse than a banner |
+| 11 | Read-only is a per-workbook preference plus Excel's current `Workbook.readOnly`; the header chip is status, the Settings switch is the control | One persisted field, no workbook write, and a forced state the user cannot accidentally turn off |
 
 ## 1. Invariants
 
@@ -52,13 +53,23 @@ All three change the URL, so all three start a new conversation. The old convers
 ### 2.4 Linking
 
 - Entry points: History's empty state, and the workbook menu.
-- Lists every conversation on the machine except the current workbook's, with its path and date, newest first, filterable by path or name.
+- A full-height picker (not a menu) titled **Link to an old conversation**, with a **Filter by path or name** field.
+- Lists every conversation on the machine except the current workbook's, with its path and date, newest first, grouped by workbook, filterable by path or name.
 - Linking **moves** the conversation file under the current workbook's key and appends an audit note. One-way; linking it back to the original key is the undo. No copy, no merge, no duplicate.
+- The conversation records the original key, path, group and time in `linkedFrom`, so the "Move back to {workbook}" action in its History overflow works after a pane reload, not only through the immediate Undo toast.
+- An unsaved workbook has no key: the picker entry is disabled with "Save the workbook first", and History says "History starts when you save this workbook." No memory-only link is offered.
 - The picker is the only cross-workbook operation in v1.
 
 ### 2.5 One pane per workbook
 
 There is no API that follows the active workbook, so identity is never in doubt inside a pane. Two workbooks are two panes with two keys. The same workbook opened from two paths is two keys — a copy is a different file.
+
+### 2.6 Read-only preference
+
+- `readOnly` is a per-workbook **user preference**, stored in `workbook.json` and changed through `PUT /api/history/workbooks/:key/read-only` with `{ "readOnly": boolean }`. It is never written into the workbook file.
+- Effective read-only is `setting.readOnly || Workbook.readOnly`, recomputed when the workbook opens. `Workbook.readOnly` is Excel's read-only state, not a stored preference; the client does not overwrite the preference when forced.
+- The header lock chip is a status indicator and Settings shortcut, not a toggle; the switch in Settings → Editing is the only control (#16 resolves the #8 C4b / #9 wording).
+- Turning the mode on is disabled while a proposal is unresolved; a restored pending proposal is shown read-only and cannot be applied until the workbook is writable and the mode is off.
 
 ## 3. The store
 
@@ -91,6 +102,7 @@ Consequences, accepted: the backend is no longer stateless (ADR 0001 §10 amende
   "name": "Q3 Forecast.xlsx",
   "instructions": "",
   "instructionsUpdatedAt": null,
+  "readOnly": false,
   "createdAt": "2026-11-08T10:00:00Z",
   "updatedAt": "2026-11-08T10:00:00Z"
 }
@@ -148,9 +160,12 @@ The server never joins a client string into a path. Every later call names a ser
   "createdAt": "2026-11-08T10:00:00Z",
   "updatedAt": "2026-11-08T10:04:00Z",
   "turns": [],
-  "compactions": []
+  "compactions": [],
+  "linkedFrom": null
 }
 ```
+
+`linkedFrom` is present only on a conversation moved by `POST /api/history/link`: `{ "key", "url", "name", "linkedAt" }`. It is the source for "Move back to {workbook}"; it is cleared when the conversation is linked back. It is metadata, not transcript content, and is never sent to the model.
 
 A turn:
 
@@ -333,6 +348,7 @@ Loopback-only, same-origin, JSON, all under `/api/history`. Keys are server-deri
 | `GET` | `/api/history/workbooks` | every workbook with counts and sizes |
 | `GET` | `/api/history/workbooks/:key` | `workbook.json` plus conversation summaries |
 | `PUT` | `/api/history/workbooks/:key/instructions` | replace the whole field |
+| `PUT` | `/api/history/workbooks/:key/read-only` | replace the `readOnly` preference (`{readOnly: boolean}`); never changes the workbook file |
 | `GET` | `/api/history/workbooks/:key/conversations/:id` | one envelope |
 | `PUT` | `/api/history/workbooks/:key/conversations/:id` | write the envelope; creates on first write |
 | `DELETE` | `/api/history/workbooks/:key/conversations/:id` | delete one |
@@ -383,7 +399,8 @@ Voice unchanged from [#8 §9](08-sidebar-ux.md): specific, calm, second person, 
 ## 14. Owned elsewhere
 
 - **#12** — tool schemas, SSE events, the system prompt and the instructions block's exact framing, model catalog and context windows, token counting, error codes.
-- **#13** — prototype states for History, the link picker, the compaction divider, the budget banner and the store-failure banner.
+- **#13** — visual direction prototype (validated B — Claude-close).
+- **#16** — prototype states for History, the link picker, compaction, the budget banner, store failure, the instructions copy chip and the read-only control; closed 2026-11-08. Surface amendment folded into #8; read-only field/API settled here.
 - **#9** — approval, audit record content, drift checks, interrupted recovery.
 - **#10** — inventory, reads, citations, and the revision counter (not persisted).
 - **#8** — surfaces, component geometry, copy voice.

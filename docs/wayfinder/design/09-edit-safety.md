@@ -81,10 +81,12 @@ So v1 has no rollback machinery beyond Excel's undo. The safety comes from refus
 
 ### 2.4 Read-only
 
-- A per-workbook local setting (header lock chip), persisted with the conversation store (#11), never written into the workbook.
-- Forced on when `Workbook.readOnly` is true ([Workbook](https://learn.microsoft.com/en-us/javascript/api/excel/excel.workbook?view=excel-js-1.21)); the chip explains why it cannot be turned off.
+- A per-workbook local setting, persisted as `readOnly` in the workbook's `workbook.json` with the conversation store (#11), never written into the workbook. The API is `PUT /api/history/workbooks/:key/read-only` with `{ "readOnly": boolean }`; the value stores the user's preference only.
+- The header lock chip is a **status indicator and Settings shortcut**, not a toggle. The switch in Settings → Editing is the only on/off control. This reconciles #8 C4b's non-toggle chip with #11's missing field; the #16 verdict is folded into #8.
+- Effective mode is `setting.readOnly || Workbook.readOnly`, re-evaluated whenever the workbook opens. Forced on when `Workbook.readOnly` is true ([Workbook](https://learn.microsoft.com/en-us/javascript/api/excel/excel.workbook?view=excel-js-1.21)); the Settings switch is shown on and disabled, and its footnote explains why it cannot be turned off. The persisted preference is not changed, so a later writable copy opens in the user's chosen mode.
+- The switch is disabled while a proposal is unresolved ("Apply or discard the pending changes before switching modes."); turning the mode on must not strand a card.
 - When on, every write tool returns a structured `ReadOnly` error. No proposal is staged, no card is created. The assistant explains and offers to turn the mode off; the next turn can propose.
-- Reads are unaffected. Protected sheets are not a mode; they are per-row blockers (§3.5).
+- Chat, reads and citations are unaffected; the composer stays enabled with "Read-only mode — questions only" and "Read-only mode. Edits are unavailable; questions still work." Protected sheets are not a mode; they are per-row blockers (§3.5).
 
 ---
 
@@ -179,7 +181,7 @@ Every turn's writes are staged, rendered as one card, and resolved by Apply or D
 
 ### 4.2 Read-only
 
-As §2.4. The lock chip is the only control; the mode is per workbook; the model is told on the next turn. A read-only card does not exist because nothing is staged.
+As §2.4. The header chip is the only header affordance and opens Settings; the Settings switch is the only control. The mode is per workbook; the model is told on the next turn. A read-only card does not exist because nothing is staged. When Excel reports the workbook read-only, the switch is forced on and cannot be turned off; the chip tooltip explains it. A restored pending proposal is shown but cannot be applied until the workbook is writable and the mode is off.
 
 ### 4.3 Auto-apply (deferred)
 

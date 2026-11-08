@@ -2,7 +2,7 @@
 
 Ticket: [#14 · Confirm the blueprint is decision-complete](https://github.com/mustaphaelou/excel-agent/issues/14)
 Reviewed: 2026-11-08
-Status: **review complete · blueprint not yet decision-complete** — one gap remains (#16). #15 closed 2026-11-08; the test strategy is recorded in [15-test-strategy.md](15-test-strategy.md). No architecture reversal is implied.
+Status: **review complete · blueprint decision-complete** — both gaps closed 2026-11-08. #15 closed with [15-test-strategy.md](15-test-strategy.md); #16 closed with [16-safety-persistence.md](16-safety-persistence.md). No architecture reversal is implied.
 
 The map is an index; this is the handoff, not a second copy of the decisions. The durable records are linked, not restated.
 
@@ -10,18 +10,16 @@ The map is an index; this is the handoff, not a second copy of the decisions. Th
 
 ## Verdict
 
-Every **v1 product axis** has a settled decision: runtime (ADR 0001), UX (#8 + the #13 amendment), safety (#9), context and citations (#10), persistence (#11), and protocol/tools (#12). The #13 prototype validated the visual direction and is folded into #8.
+Every **v1 product axis** has a settled decision: runtime (ADR 0001), UX (#8 + the #13/#16 amendments), safety (#9), context and citations (#10), persistence (#11), protocol/tools (#12), and tests (#15). The #13 prototype validated the visual direction and is folded into #8; the #16 extension settled the safety/persistence surfaces and is folded into #8/#9/#11.
 
-Two gaps blocked a clean "start building" handoff; one was closed the same day:
+Two gaps blocked a clean "start building" handoff; both were closed the same day:
 
 | Gap | Ticket | Why it was a blocker |
 | --- | --- | --- |
 | **Test strategy** | [#15](https://github.com/mustaphaelou/excel-agent/issues/15) | **Closed 2026-11-08.** No unit-test runner, mocked Office.js harness, SSE fixtures, real-Excel smoke test or CI gate. Record: [15-test-strategy.md](15-test-strategy.md). |
-| **Missing safety/persistence surfaces** | [#16](https://github.com/mustaphaelou/excel-agent/issues/16) (open) | #11 assigns the link picker, compaction, retention, store-failure and instructions-copy states to #13, but #13 did not implement them; #8's component inventory predates #11. The read-only control is also inconsistent: #8 puts a chip in the header and sends it to Settings, #9 calls it the only control, and #11's `workbook.json`/API has no field for it. |
+| **Missing safety/persistence surfaces** | [#16](https://github.com/mustaphaelou/excel-agent/issues/16) | **Closed 2026-11-08.** The read-only control was inconsistent: #8 put a chip in the header and sent it to Settings, #9 called it the only control, and #11's `workbook.json`/API had no field. Link picker, compaction, retention, store-failure and instructions-copy states were unbuilt. Record: [16-safety-persistence.md](16-safety-persistence.md). |
 
-Neither gap changes the architecture or the validated B direction. The test harness lands in build phase 1; #16 must land before the persistence phase.
-
-**What "decision-complete" now means:** close #16, record its answer, and amend #8/#11 where it resolves the surfaces. Then this handoff is clean.
+Neither gap changes the architecture or the validated B direction. The test harness lands in build phase 1; the #16 surfaces land in phase 5.
 
 ---
 
@@ -34,14 +32,18 @@ Neither gap changes the architecture or the validated B direction. The test harn
 | Clickable visual direction | [#13](https://github.com/mustaphaelou/excel-agent/issues/13) / `prototype/clickable-sidebar-13` | Settled; throwaway, not merged |
 | Formula-safe edits, approval, undo, risk, audit | [#9](https://github.com/mustaphaelou/excel-agent/issues/9) / [09-edit-safety.md](09-edit-safety.md) | Settled |
 | Context inventory, paged reads, citations, locale, staleness | [#10](https://github.com/mustaphaelou/excel-agent/issues/10) / [10-context-and-citations.md](10-context-and-citations.md) | Settled |
-| History store, identity, instructions, compaction, retention | [#11](https://github.com/mustaphaelou/excel-agent/issues/11) / [11-history-and-instructions.md](11-history-and-instructions.md) | Data model settled; surfaces gap #16 |
+| History store, identity, instructions, compaction, retention | [#11](https://github.com/mustaphaelou/excel-agent/issues/11) / [11-history-and-instructions.md](11-history-and-instructions.md) | Settled; #16 surfaces prototyped |
 | Protocol, SSE, 29-tool catalog, validation, errors, prompt | [#12](https://github.com/mustaphaelou/excel-agent/issues/12) / [12-agent-protocol.md](12-agent-protocol.md) · [12-tools.json](12-tools.json) | Settled |
 | Test strategy | [#15](https://github.com/mustaphaelou/excel-agent/issues/15) / [15-test-strategy.md](15-test-strategy.md) | Settled |
-| Read-only control and #11 UI surfaces | [#16](https://github.com/mustaphaelou/excel-agent/issues/16) | **Open** |
+| Read-only control and #11 UI surfaces | [#16](https://github.com/mustaphaelou/excel-agent/issues/16) / [16-safety-persistence.md](16-safety-persistence.md) | Closed 2026-11-08; amended #8/#9/#11 |
 
 ### What was exercised in #13
 
 The prototype exercised empty, loading, streaming, answer, review, partial, applied, history, settings and error states; 260/380/520/720 widths; light/dark; mocked streaming/stop; citation-driven sheet selection; per-row inclusion and overwrite acknowledgement; apply/applied; partial failure and scoped retry; history scope, rename and delete; instructions save; model menu; auto-open; and error retry. Lighthouse accessibility scored 100 on the sampled hybrid and Claude-close review screens, Claude empty and Fluent dark.
+
+### What was exercised in #16
+
+The extension exercised the link picker (filter, move, Undo, Move back, no-other-conversations, no-match and unsaved states), compaction (80% notice, summarizing progress, divider, View original read-only and a second stacked cut), retention (80%/100% banners, per-workbook delete, delete-all confirmation, export actions and Open folder), store failure (persistent banner, Retry, corrupt-file notice and recovered conversation), instructions copy (empty field, chip, replacement, Saved), and read-only (user on/off, forced-on, disabled switch and write refusal). It was checked at 380 and 260 px in light and dark; all 21 presets load without console errors and with no pane/doc horizontal overflow. Lighthouse accessibility, best practices, SEO and agentic browsing scored 100 on the link picker, retention and forced read-only samples. This is a prototype check, not the #15 suite.
 
 It is not a test suite and does not count toward #15.
 
@@ -75,7 +77,7 @@ Still to verify or accept:
 2. **Windows runtime prerequisites** — Node 24 on the Windows side, Task Scheduler one-time elevation, CA trust, port 3000 cutover. The WSL checkout used for this review reports Node 22.23.4, so the build/test runtime is not the Windows runtime; verify at install.
 3. **History store on NTFS under antivirus/indexer** — `.tmp` + rename atomicity, `EPERM`/`EBUSY` retries, corrupt-file recovery. Designed, not exercised.
 4. **Auto-open setting** — writing `Office.AutoShowTaskpaneWithDocument` and verifying it survives save/reopen; designed, not in the #6 spike.
-5. **#16 surfaces** — link picker, compaction, retention/Manage history, store-failure, instructions copy, read-only control. Data model exists; UI and read-only persistence do not.
+5. **#16 surfaces** — link picker, compaction, retention/Manage history, store-failure, instructions copy, read-only control. Prototyped and decided; production implementation and real-store/Excel verification land in phase 5.
 6. **Tests** — the runner, harness, fixtures and smoke are decided in [#15](https://github.com/mustaphaelou/excel-agent/issues/15) / [15-test-strategy.md](15-test-strategy.md), but nothing is stood up until build phase 1. The CDP attach and pane auto-open are phase-1 spikes.
 7. **Web fetch SSRF boundary** — private/link-local blocking, redirect re-checks, DNS pinning and the allowlist are specified; the production implementation is not tested.
 8. **Performance budgets** — first paint, streaming frame budget, table/citation rendering at 48 characters per line; measured as targets, not on the final build.
@@ -109,14 +111,14 @@ This is a sequence, not a schedule. The hard gates are what matter.
    **Gate:** each family has a real-Excel smoke case and a risk class.
 
 5. **Persistence and #16 surfaces.**
-   History backend, resume, proposals, instructions, deletion/export; link picker, compaction, retention, store-failure and read-only control after #16 closes.
+   History backend, resume, proposals, instructions, deletion/export; link picker, compaction, retention, store-failure and read-only control per [16-safety-persistence.md](16-safety-persistence.md).
    **Gate:** pane close/reopen resumes; Save As/link works; backend-down degrades with a banner; read-only refuses writes; compaction leaves originals.
 
 6. **Hardening and cutover.**
    Error/offline/rate-limit/auth states, Excel-busy and timeout paths, dark/narrow/200 % zoom, focus/keyboard/accessibility, performance budgets, packaging, uninstall/renew-cert, rollback to the `.xlam`.
    **Gate:** the #15 smoke matrix passes on the installed build; rollback is exercised.
 
-Do not start phase 5 before #16 closes. Do not call the build verifiable before #15 closes. Phases 1–4 can proceed once the test harness is usable.
+Do not call the build verifiable before #15's harness and smoke are usable. Phases 1–4 can proceed now; phase 5 starts with the #16 surfaces.
 
 ---
 
@@ -128,6 +130,6 @@ Do not start phase 5 before #16 closes. Do not call the build verifiable before 
 - [x] Risks, unknowns and out-of-scope are explicit.
 - [x] Build sequence and hard gates recorded above.
 - [x] [#15 test strategy](https://github.com/mustaphaelou/excel-agent/issues/15) closed (2026-11-08).
-- [ ] [#16 safety/persistence surfaces](https://github.com/mustaphaelou/excel-agent/issues/16) closed and folded into #8/#11.
+- [x] [#16 safety/persistence surfaces](https://github.com/mustaphaelou/excel-agent/issues/16) closed and folded into #8/#11.
 
-**Bottom line:** the architecture and product decisions are stable. The blueprint is *not yet* decision-complete; close #16, then the build can start with a clean gate.
+**Bottom line:** the architecture and product decisions are stable and the blueprint is decision-complete. The build can start with phase 1; the remaining unknowns are implementation verification, not open design questions.

@@ -1,7 +1,7 @@
 # Sidebar UX and visual language
 
 Ticket: [#8 Sidebar UX and visual language](https://github.com/mustaphaelou/excel-agent/issues/8)
-Status: decided 2026-11-07 · amended 2026-11-08 after the #13 prototype
+Status: decided 2026-11-07 · amended 2026-11-08 after the #13 and #16 prototypes
 Companion: [annotated wireframe sheet](08-wireframes.html) (open it in a browser; frames are 1:1 CSS px)
 Depends on: [#2](https://github.com/mustaphaelou/excel-agent/issues/2) (capability envelope), [#5](https://github.com/mustaphaelou/excel-agent/issues/5) (Claude teardown), [#6](https://github.com/mustaphaelou/excel-agent/issues/6) (sideload spike), [#7](https://github.com/mustaphaelou/excel-agent/issues/7) (runtime, [ADR 0001](../../adr/0001-runtime-topology.md))
 
@@ -48,6 +48,102 @@ The clickable prototype ([#13](https://github.com/mustaphaelou/excel-agent/issue
 **What does not change.** One pane per workbook; 380 px default with a stored width; 260–720 px reflow; one column; ribbon + Home > Add-ins + opt-in auto-open; no global shortcut; tool-derived status; inline citation chips with no sources footer; per-workbook history/instructions; full-height History/Settings; no `Claude Log`; one approval gate per turn; per-row inclusion and overwrite acknowledgement; one `Excel.run` / undo group; partial failure with scoped Retry and Dismiss; the complete state matrix, copy deck, keyboard model, focus return, reduced-motion, forced-colors, 200 % zoom and contrast floors. The composer remains visible and explains its gate; the edit card remains the review surface, not a table.
 
 **Implementation.** Production remains React 19 + TypeScript + Vite with CSS custom properties and bundled Source Serif 4; the prototype is not a code source. The two source snapshots for implementation review are the [B review frame](https://raw.githubusercontent.com/mustaphaelou/excel-agent/prototype/clickable-sidebar-13/docs/wayfinder/design/13-prototype/screenshots/claude-review.png) and the [B first-run frame](https://raw.githubusercontent.com/mustaphaelou/excel-agent/prototype/clickable-sidebar-13/docs/wayfinder/design/13-prototype/screenshots/claude-empty.png). Re-run the prototype at 260/380/520/720 in light and dark before changing component geometry.
+
+### Safety and persistence amendment — 2026-11-08
+
+The #16 extension of the throwaway prototype ([`prototype/safety-persistence-16`](https://github.com/mustaphaelou/excel-agent/tree/prototype/safety-persistence-16/docs/wayfinder/design/13-prototype)) exercised the six surfaces #11 assigned to a prototype. This amendment is the production-facing decision; no new visual direction was introduced. All surfaces use B's shell, composer and full-height view anatomy. Screenshots: [link picker](https://raw.githubusercontent.com/mustaphaelou/excel-agent/prototype/safety-persistence-16/docs/wayfinder/design/13-prototype/screenshots/16-link.png), [unsaved](https://raw.githubusercontent.com/mustaphaelou/excel-agent/prototype/safety-persistence-16/docs/wayfinder/design/13-prototype/screenshots/16-unsaved.png), [compaction notice](https://raw.githubusercontent.com/mustaphaelou/excel-agent/prototype/safety-persistence-16/docs/wayfinder/design/13-prototype/screenshots/16-compaction-notice.png), [divider](https://raw.githubusercontent.com/mustaphaelou/excel-agent/prototype/safety-persistence-16/docs/wayfinder/design/13-prototype/screenshots/16-compaction-divider.png), [retention 80%](https://raw.githubusercontent.com/mustaphaelou/excel-agent/prototype/safety-persistence-16/docs/wayfinder/design/13-prototype/screenshots/16-retention-80.png), [over budget](https://raw.githubusercontent.com/mustaphaelou/excel-agent/prototype/safety-persistence-16/docs/wayfinder/design/13-prototype/screenshots/16-retention-100.png), [store failure](https://raw.githubusercontent.com/mustaphaelou/excel-agent/prototype/safety-persistence-16/docs/wayfinder/design/13-prototype/screenshots/16-store-failure.png), [instructions copy](https://raw.githubusercontent.com/mustaphaelou/excel-agent/prototype/safety-persistence-16/docs/wayfinder/design/13-prototype/screenshots/16-instructions-copy.png), [read-only chat](https://raw.githubusercontent.com/mustaphaelou/excel-agent/prototype/safety-persistence-16/docs/wayfinder/design/13-prototype/screenshots/16-readonly-chat.png), [forced-on Settings](https://raw.githubusercontent.com/mustaphaelou/excel-agent/prototype/safety-persistence-16/docs/wayfinder/design/13-prototype/screenshots/16-readonly-forced.png). Lighthouse accessibility is 100 on the link picker, retention and forced read-only samples.
+
+**What was settled.**
+
+1. **Link picker is a full-height view, reached from History's empty state and the workbook menu.** It lists every conversation from other workbooks with its full path and date, grouped by workbook, and filters on path or conversation name. Each row has one explicit "Move to this workbook" action. Moving is one-way; the original key is recorded on the conversation and shown in the row's overflow as "Move back to {workbook}", so the undo survives a pane reload as well as the toast's Undo. The current workbook's conversations are never listed. An unsaved workbook has no key, so History says "History starts when you save this workbook" and the picker entry is disabled with "Save the workbook first"; no memory-only linking.
+2. **Compaction lives above the composer, not in the header banner.** The 80% notice is conversation-scoped: "This chat is {pct}% of the model's context. Summarize earlier turns or start a new chat." The button opens a determinate wait ("Summarizing {n} turns…") and then inserts a divider at the cut. "View original" expands the pre-cut turns read-only (no Copy, Retry or Steps actions); the originals remain in the transcript. A second compaction cuts from its own boundary and stacks a second divider. Nothing auto-summarizes.
+3. **Retention management is a Settings section, not a second History screen.** The global 80% / 100% banner links there. It shows the store total against the 250 MB soft budget, then one row per workbook with path, conversation count, size and Delete, plus Open folder and "Delete all history…". Per-conversation `.md` and `.json` export lives in the History row overflow. Delete-all confirms with the conversation count and size. Nothing is deleted automatically.
+4. **Store failure degrades; it never blocks the turn.** A persistent warning banner under the header says "History isn't being saved. Your conversation is still open." with Retry. A corrupt file is reported in History as "1 conversation couldn't be read. It was set aside as {file}." with Open folder. A conversation restored from the last good copy carries a "Recovered" badge. Retry clears the banner and announces "History is being saved again."
+5. **Instructions migration is a one-click replacement, never a merge.** The "Copy instructions from {workbook}" chip appears only while the field is empty and offers the most recently used other workbook that has instructions. The click replaces the empty field, the chip disappears and the normal Saved state runs. There is no append path.
+6. **Read-only is a persisted per-workbook mode with one control.** The header lock chip is a **status indicator and Settings shortcut**, not a toggle; the switch in Settings → Editing is the only on/off control. The preference is stored as `readOnly` in the workbook's `workbook.json` (never in the workbook file) and changed through `PUT /api/history/workbooks/:key/read-only`. Effective read-only is `setting.readOnly || Workbook.readOnly`, re-evaluated when the workbook opens. When Excel reports the workbook read-only, the switch is shown on and disabled with "Excel opened this workbook read-only, so edits are unavailable."; the persisted preference is unchanged, so a later writable copy opens in the user's chosen mode. Turning the mode on is disabled while a proposal is unresolved ("Apply or discard the pending changes before switching modes."). Chat and reads stay enabled; the composer hint says "Read-only mode. Edits are unavailable; questions still work." and write tools return the #9 `ReadOnly` error without staging a card.
+
+**Component inventory amendments.**
+
+| ID | Change |
+| --- | --- |
+| C4b | Header chip is now specified as **status + Settings entry**, not a toggle. 22 px pill, lock icon, "Read-only"; hidden when off. Tooltip: user mode "Read-only mode is on. Questions only. Open Settings to change it."; forced mode "This workbook is open read-only. Questions only." Clicking opens Settings → Editing and focuses the switch. At ≤299 px the label collapses to the lock icon with the same accessible name. |
+| C6 | Global banner now carries two additional persistent statuses: **history budget** (warn at 80%, danger at 100%, action "Manage history") and **store failure** (warn, message + Retry). Both sit under the header and above the view body; neither overlays. |
+| C25 / C27 | Read-only is an explicit composer state: enabled for questions, placeholder "Read-only mode — questions only", muted lock hint. It does not disable send; it gates writes. |
+| C39 | History gets a link entry in the empty state and on the workbook menu; the empty state has a distinct unsaved variant. Scope and grouping are unchanged. |
+| C41 | Row badges now cover **Pending**, **Recovered** and **Moved here**. A moved row's overflow gains "Move back to {workbook}". |
+| C42 | Row overflow adds **Export .md** and **Export .json** beside Rename/Delete. |
+| C43 | Footer unchanged: "Stored on this machine" + Delete all…; the link picker and export actions live in the body/row menu. |
+| C44 / C49 | Settings gains an **Editing** section and a full **History** management section (total, per-workbook rows, Open folder, Delete all). Section order: Instructions, Model, Appearance, Startup, Editing, History, About. |
+| C45 | Instructions field gains the **copy-from-workbook chip**, visible only when the field is empty. |
+| C51 | **Link picker view** — full height, back to History (or chat when opened from the menu), intro line, search field, grouped rows. States: list, filtered, no match, no other conversations, unsaved. |
+| C52 | **Link row** — title, full path, date, message count/sheets, one "Move to this workbook" button. No multi-select. |
+| C53 | **Compaction notice** — above the composer, spark glyph, percentage line, "Summarize earlier turns" + "Start a new chat"; summarizing variant shows "Summarizing {n} turns…" and a progress bar. |
+| C54 | **Compaction divider** — rule, "Earlier {n} turns summarized", "View original"/"Hide original"; expanded originals render read-only. |
+| C55 | **Manage-history section** — total size / limit, budget track, per-workbook rows with path/count/size/Delete, Open folder, Delete all. |
+| C56 | **History store notice** — danger inset with the corrupt-file copy and Open folder. |
+| C57 | **Read-only switch row** — label, description, "Saved with this workbook's history; never written into the file." footnote, 34 × 18 switch; disabled for forced-on and pending proposals. |
+| C58 | **Instructions copy chip** — pill with copy glyph and "Copy instructions from {workbook}". |
+
+**State matrix additions.**
+
+| State | Header | Banner / notice | Transcript | Composer |
+| --- | --- | --- | --- | --- |
+| Link picker | back · "Link to an old conversation" | — | old conversations grouped by path; filtered/no-match/empty states | n/a |
+| Unsaved workbook | workbook name "Book1", unsaved dot | — | History empty: "History starts when you save this workbook"; picker disabled | normal |
+| Compaction at 80% | workbook | notice above composer | full transcript; no divider yet | normal |
+| Summarizing | workbook | "Summarizing {n} turns…" + progress | unchanged | normal |
+| Compacted | workbook | — | divider at the cut; originals collapsed | normal |
+| View original | workbook | — | pre-cut turns read-only under the divider | normal |
+| Second compaction | workbook | notice above composer | two stacked dividers | normal |
+| History at 80% | Settings | budget warn banner | n/a | n/a |
+| History over budget | Settings | budget danger banner | n/a | n/a |
+| Store failing | History or chat | persistent "History isn't being saved" banner + Retry | normal; recovered row in History | normal |
+| Read-only (user) | lock chip | — | normal | enabled; hint; writes refused |
+| Read-only (forced) | lock chip | — | normal | enabled; hint; switch disabled in Settings |
+| Read-only + pending proposal | lock chip | — | proposal card | gated by the proposal; mode switch disabled |
+
+**Copy additions (exact).**
+
+| Context | Copy |
+| --- | --- |
+| Link picker title | Link to an old conversation |
+| Link picker intro | Moves a conversation from another workbook. It is not copied, and you can move it back later. |
+| Link picker search | Filter by path or name |
+| Link picker empty | No other conversations yet |
+| Link picker no match | No conversations match |
+| Link action | Move to this workbook |
+| Linked toast | Moved to this workbook. |
+| Link-back action | Move back to {workbook} |
+| Unsaved history | History starts when you save this workbook |
+| Unsaved link | Save the workbook first |
+| Compaction notice | This chat is {pct}% of the model's context. Summarize earlier turns or start a new chat. |
+| Summarizing | Summarizing {n} turns… |
+| Compaction divider | Earlier {n} turns summarized · View original |
+| Compaction original toggle | Hide original |
+| Budget banner, 80% | History is {pct}% of its {size} budget. Manage history |
+| Budget banner, 100% | History is over its {size} budget. Nothing is deleted automatically. Manage history |
+| Manage history total | {used} MB of {limit} MB |
+| Manage history row | {n} conversations · {size} MB |
+| Store failure | History isn't being saved. Your conversation is still open. |
+| Store retry success | History is being saved again. |
+| Corrupt file | 1 conversation couldn't be read. It was set aside as {file}. |
+| Recovered badge | Recovered |
+| Instructions chip | Copy instructions from {workbook} |
+| Instructions copied | Copied instructions from {workbook}. |
+| Read-only chip | Read-only |
+| Read-only user tooltip | Read-only mode is on. Questions only. Open Settings to change it. |
+| Read-only forced tooltip | This workbook is open read-only. Questions only. |
+| Read-only settings label | Read-only mode |
+| Read-only settings description | No edits or proposals. Reads and questions still work. |
+| Read-only settings footnote | Saved with this workbook's history; never written into the file. |
+| Read-only forced description | Excel opened this workbook read-only, so edits are unavailable. |
+| Read-only forced footnote | Read-only mode is forced on by Excel and can't be turned off here. |
+| Read-only pending | Apply or discard the pending changes before switching modes. |
+| Read-only composer placeholder | Read-only mode — questions only |
+| Read-only composer hint | Read-only mode. Edits are unavailable; questions still work. |
+| Read-only refusal | I can't stage an edit while read-only mode is on. Turn it off in Settings, then ask again — reads and questions still work. |
+
+**What does not change.** The B shell, composer, full-height History/Settings, one pane per workbook, no workbook identity marker, no auto-delete, no auto-compaction, no append-only instructions, and the #9 gate. #16 changes surfaces and adds the read-only persistence field; it does not reopen the visual direction.
 
 **The one correction to the ticket body.** The ticket says width and dock state persist in `taskpanes.xml`. The [#6 spike](../../wayfinder/research/06-pane-sideload-spike.md) measured the opposite for this sideload: a saved `width="600"` reopened at the 326 px default, `dockstate` was empty, and `locked` was ignored. The design therefore treats width as a preference that must be re-applied, not state that can be relied on. `Office.extensionLifeCycle.taskpane.setWidth()` is the only width API; there is no `getWidth`.
 
