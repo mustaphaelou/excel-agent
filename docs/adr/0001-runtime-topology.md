@@ -48,7 +48,7 @@ flowchart LR
   Server -->|"SSE relay"| Pane
 ```
 
-`/api/chat` is the only streaming route. The pane parses the OpenAI SSE frames (content deltas, tool-call deltas, `finish_reason`, the final usage chunk), executes any Excel tool calls, appends `role: "tool"` results, and posts the next request. Read tools run immediately; write tools wait for the pane's approval gate.
+`/api/chat` is the only streaming route. The server normalizes the gateway's OpenAI SSE frames into #12's small event stream (`start`, `text.delta`, `tool_call`, `usage`, `done`, `error`, `cancelled`); the pane consumes those events, executes any Excel tool calls, appends `role: "tool"` results, and posts the next request. Read tools run immediately; write tools wait for the pane's approval gate. This is #12's amendment to the earlier note that the pane parses raw frames; the topology is unchanged.
 
 Build and deploy:
 

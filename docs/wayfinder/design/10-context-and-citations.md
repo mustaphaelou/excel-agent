@@ -7,7 +7,7 @@ Decided with the dev on 2026-11-08. Builds on the capability envelope ([#2](http
 
 ## Summary
 
-The model sees a map, not a dump. Every turn it receives a compact **inventory** — sheets, visibility, used ranges, tables, pivots, named ranges, selection — and cell data only through **paged reads** that name their sheet, address and revision. There is no full-workbook snapshot and no hidden pre-read.
+The model sees a map, not a dump. Every turn it receives a compact **inventory** — sheets, visibility, used ranges, tables, pivots, named ranges, selection — and bulk cell data only through **paged reads** that name their sheet, address and revision; the ≤500-cell selection is the one bounded inline exception. There is no full-workbook snapshot and no hidden pre-read.
 
 Citations are sheet-qualified A1 addresses emitted as **structured tokens**, validated against the live workbook, and navigated with `activate`/`select` only. The protocol is **en-US canonical**; the pane localizes what it displays, never what it exchanges.
 
@@ -31,7 +31,7 @@ Caps are **2,000 cells per read** and **60K tokens of workbook data per turn**. 
 
 ## 1. Invariants
 
-- **I1 — The model sees what it asked for.** The inventory is a map; cell values enter context only through a read tool call. There is no background workbook scanner.
+- **I1 — The model sees what it asked for.** The inventory is a map plus table headers; bulk cell values enter context only through a read tool call. The ≤500-cell selection is the one bounded inline exception. There is no background workbook scanner.
 - **I2 — Every cell is traceable.** Each block carries its sheet, address and revision. Nothing the model saw is unattributable to a tool result or the inventory.
 - **I3 — Reads are bounded and honest.** The pane enforces the caps. A truncated read says it was truncated and offers the next address; nothing is silently dropped.
 - **I4 — Citations are addresses, not ranges.** A citation is validated against the workbook, not against model memory. It is point-in-time and is never silently re-mapped after a structural edit.
@@ -196,7 +196,7 @@ Abridged: `cells` shows two of the fifty rows.
 ### 3.3 Read request
 
 ```json
-{ "sheet": "Forecast", "address": "A1:H50", "formulas": true, "text": false, "maxCells": 2000 }
+{ "sheet": "Forecast", "address": "A1:H50", "formulas": true, "text": false }
 ```
 
 The result is a `CellBlock` (§3.2) plus the tool-level `notes`.
@@ -204,7 +204,7 @@ The result is a `CellBlock` (§3.2) plus the tool-level `notes`.
 - `sheet` is a name or id; names are matched case-insensitively and canonicalized.
 - `address` is sheet-local A1, a named range, or a whole column/row (`A:A`, `1:1`).
 - `formulas` adds the sparse formula map. `text` adds display text for cells whose format is not covered by the legend.
-- `maxCells` is clamped to 2,000; a larger range is paged, not rejected.
+- There is no `maxCells` argument. The pane always pages at 2,000 grid cells; a larger range returns its first page and `hasMore.next` (the argument was dropped when #12 froze the tool schema).
 
 ---
 
@@ -340,7 +340,7 @@ Tool errors are structured and actionable, never prose:
 
 - Tables are inventoried with their range and header labels. The labels matter: they are what lets the model read `ForecastTbl[Revenue]` without a second call.
 - Table data is read by A1 range; there is no separate table-read tool in v1. Table totals/header ranges are A1 too.
-- Pivots are inventoried with name and output range. Their output cells are ordinary readable cells. Pivot **fields** are not inventoried; a field list is a future tool, and pivot editing is #9/#12.
+- Pivots are inventoried with name and output range. Their output cells are ordinary readable cells. Pivot **fields** are not inventoried; [#12](https://github.com/mustaphaelou/excel-agent/issues/12) adds `get_pivot` as the field-list tool, and pivot editing is #9/#12.
 
 ### 6.5 Merged cells, hidden sheets, whole columns, spill
 
@@ -590,7 +590,7 @@ The note is capped, names sheets and addresses, and never claims more than the e
 - **Events coalesce.** Dirty areas are capped at 10; the note is a summary, not a journal.
 - **No document-close event.** The revision dies with the pane; persistence is #11.
 - **Inventory is rebuilt per turn.** A 200-sheet workbook costs a batch of calls at each turn start; that is the price of freshness.
-- **Pivot fields are not inventoried.** The output range is; a field list is future work.
+- **Pivot fields are not inventoried.** The output range is; #12’s `get_pivot` is the field-list tool.
 - **Very hidden sheets are listed by name.** Their existence is not secret from the model; their contents require an explicit read.
 - **The model is remote.** Workbook data sent as context goes to the selected gateway model; "local-first" means no server-side store, not no egress. #11 owns the privacy copy.
 

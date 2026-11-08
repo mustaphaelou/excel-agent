@@ -373,7 +373,7 @@ Failure:
 
 ### 6.1 `read_range`
 
-The only way cell data enters context ([#10 §4](10-context-and-citations.md)).
+The only bulk cell-data path ([#10 §4](10-context-and-citations.md)); the ≤500-cell selection is the inline exception.
 
 Arguments:
 
@@ -951,7 +951,7 @@ It never uses `response_format` in v1; the final answer is prose, and tool argum
 | `StreamInterrupted` | Stream ended before `done` | yes, manual | "The response stopped. Retry?" |
 | `Timeout` | Step exceeded 45 s / 90 s / 5 min | yes, manual | "The model didn't answer in time. Your workbook is unchanged." |
 | `Cancelled` | User pressed Stop | no | "Stopped" |
-| `GatewayAuth` | 401/403 from gateway | no | "The gateway rejected the key. Update it in Settings." |
+| `GatewayAuth` | 401/403 from gateway | no | "The gateway rejected the key. Update config.env and restart the service." |
 | `RateLimited` | 429 / quota | yes, after `retryAfterMs` | "Rate limited. Try again in {n}s." |
 | `ModelUnavailable` | Model missing after fallbacks | yes, choose another | "That model isn't available. Pick another." |
 | `ContextOverflow` | Prompt + output exceed the window | no | "This chat is full. Summarize earlier turns or start a new chat." |

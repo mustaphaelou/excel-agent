@@ -20,7 +20,7 @@ This record settles the pane's information architecture, visual language, compon
 2. **Warm paper, one accent.** Surface `#FAF9F5` / ink `#1B1A18`; cool blue is reserved for evidence; terracotta is reserved for action. Excel green is not used inside the pane — it would read as a host command and collapse the evidence/action distinction.
 3. **Default to a 380 px webview width and remember it.** Excel's default pane is 320 px. The pane targets 380 px of webview content (≈404 px outer; calibrate the chrome offset), stores the user's width in `localStorage`, and re-applies it on every open, because the spike proved width does not survive close→reopen. Width is a machine preference, never workbook state.
 4. **One header line, not a banner.** 44 px: workbook name (truncating), unsaved dot, then history / new chat / settings at 32 px targets. New chat appears only once there is a conversation; the workbook menu is always available.
-5. **The conversation is plain, the wait is narrated.** User messages are quiet tinted blocks; assistant answers are bubble-free markdown. A tool-derived status line narrates the wait in domain language ("Reading Forecast!A1:H400 · step 2 of 3"); no helper model call is spent on it.
+5. **The conversation is plain, the wait is narrated.** User messages are quiet tinted blocks; assistant answers are bubble-free markdown. A tool-derived status line narrates the wait in domain language ("Reading Forecast!A1:H400 · step 2"); the total is unknown until the turn ends, so #12 amended the "of 3" example ([#12 §15](12-agent-protocol.md)). No helper model call is spent on it.
 6. **Citations are inline chips, with no sources footer.** 20 px pills, mono, cool fill, blue text at 5.32:1. Only structured citations become chips; cell-shaped prose never auto-links.
 7. **The edit card is the review surface.** Inline after the proposing turn, expanded by default, grouped by sheet, one row per change with a per-row checkbox, a before→after diff, and risk notes attached to the row they belong to. Apply is one gate per turn; partial failure is a state of the same card.
 8. **The composer is the only input surface.** Model picker and send/stop live inside it. While changes are pending the composer stays visible but send is disabled with a stated reason; it is never hidden.
@@ -265,7 +265,7 @@ Pane (one per workbook)
 │   │   │   ├── markdown (prose, table, formula, links)
 │   │   │   ├── inline citations
 │   │   │   └── actions: copy · retry · steps
-│   │   ├── Decision card (optional v1)
+│   │   ├── (no decision card in v1; #12 asks in prose)
 │   │   └── Edit proposal card (collapsed/expanded/applying/applied/failed)
 │   ├── Approval bar (only when the card is scrolled out of view)
 │   └── Composer: textarea · model · send/stop
@@ -321,13 +321,13 @@ Each component lists what it is, its states, and the rules that are easy to get 
 | C12 | Transcript | scroll container, 20 px turn gap | empty, populated, streaming, scrolled-up | A plain labelled `region`, not `role="log"` or `aria-live` — streaming tokens would be announced. Use one separate live region for turn milestones. `tabindex="0"` for keyboard scrolling. Auto-follow only when pinned to bottom. |
 | C13 | User message | full-width tinted block, 10 radius, 10/12 padding, 13.5/20 | normal, long, code | No avatar/label. Align left; full width so long prompts use the pane. Markdown is not rendered in user messages (plain text, preserved newlines). |
 | C14 | Assistant turn | status line, markdown, actions | streaming, complete, error, interrupted | No bubble. Max width 100%. The status line belongs to the turn, not the message. |
-| C15 | Status/step line | 6 px dot, label, step count, chevron | live, done, stalled (>8 s), interrupted | Text comes from tool calls, not a helper model. Live: "Reading Forecast!A1:H400 · step 2 of 3". Done: "3 steps · 4.8 s" + chevron to the step list. Stalled: append "still working…" and an elapsed time; don't spin faster. |
+| C15 | Status/step line | 6 px dot, label, step count, chevron | live, done, stalled (>8 s), interrupted | Text comes from tool calls, not a helper model. Live: "Reading Forecast!A1:H400 · step 2" (the total is unknown until the turn ends; #12 §15). Done: "3 steps · 4.8 s" + chevron to the step list. Stalled: append "still working…" and an elapsed time; don't spin faster. |
 | C16 | Markdown | headings, paragraphs, lists, tables, code, links, blockquotes | rendered, streaming (partial), empty | Sanitize; no raw HTML. Tables scroll horizontally; code blocks scroll; links get an external icon and `rel="noopener noreferrer"`. Partial markdown must never throw or show raw `**`. |
 | C17 | Citation chip | pill, 20 px, 6 px padding, mono 11.5, 1 px border | default, hover, focus, pressed | Only explicit citations. Cross-sheet label always includes the sheet (`Summary!B12`); same-sheet may omit it (`B12`). Click selects + scrolls; Enter/Space too. Hidden sheet, protected sheet or cell-edit mode → snackbar with the reason and an action. |
 | C18 | Table | 1 px border, 8 radius, scroll-x, 6/8 cells | short, wide, empty | `<table>` with `<th scope="col">`; numeric right-aligned, tabular; first column 550 weight; no zebra; scrollbar visible on hover/focus; never shrink columns below content. |
 | C19 | Formula/code block | 1 px border, 8 radius, mono 11, scroll-x, copy button | default, copied | Formula text is not syntax-highlighted; copy copies the syntax verbatim, including `=`, so it can be pasted into Excel. A formula containing a range does not turn the range into a citation. |
 | C20 | Message actions | text buttons 24 px: Copy, Retry, Steps | idle, hover, copied, disabled | Copy = markdown; Retry = last turn or the error card's turn; Steps = expand the tool trace. No thumbs in v1 (no training loop). |
-| C21 | Decision card | question, 2–4 option buttons, selected state | open, answered, cancelled | Optional v1, only if #12's tool surface supports a question. One click answers; selected option collapses the card; free text stays available in the composer. |
+| C21 | Decision card | question, 2–4 option buttons, selected state | not in v1 | #12 has no `ask_user` tool; v1 asks in prose. Reserved if a future tool adds a stream event and a persisted answer. |
 | C22 | Empty state | mark, serif question, description, 3 suggestions, trust line | first run, returning, offline | Suggestions fill the composer; they never send. The third suggestion is selection-aware only when a range is selected. Trust line is one line, muted, with one small icon — no shield badge. |
 | C23 | Suggestion row | 1 px border, 8 radius, 9/10 padding, 12.5 text | rest/hover/focus | Left-aligned; icon 13 px; arrow at the right; no more than 3. |
 | C24 | Approval bar | 36 px, icon, "12 changes waiting", Review button | hidden, visible | Only when the edit card is off-screen; a sticky affordance, not a second decision surface. Clicking scrolls the card into view and focuses the card header (`tabindex="-1"`). |
@@ -347,9 +347,9 @@ Each component lists what it is, its states, and the rules that are easy to get 
 | C33 | Card footer | selection count, Discard ghost, Apply primary | ready, subset selected, applying, partial | Apply is the only primary; label includes the count ("Apply 12 changes" / "Apply 9 of 12"). Zero selected disables Apply. Discard opens a confirm if anything is selected. |
 | C34 | Applying state | 2 px progress bar, per-row status, footer "Applying 3 of 12…" | applying | No cancel. Do not let the user edit the selection mid-apply. If the pane closes, the in-flight apply is gone; on reopen the card shows the last known state + "Interrupted". |
 | C35 | Partial failure | danger inset alert, failed group, "Retry N failed", "Dismiss" | partial | Failed rows keep their checks and diffs. Retry is scoped to failures. Dismiss keeps them pending in the background; it never marks them applied. |
-| C36 | Applied state | collapsed header "Applied 12 changes", Review, optional Undo | applied, auto-applied | No celebratory confetti. If #9 provides a snapshot/undo, show "Undo this turn" here; otherwise show the keyboard undo hint only for all-undoable batches. |
+| C36 | Applied state | collapsed header "Applied 12 changes", Review, Ctrl+Z hint | applied | No celebratory confetti and no in-pane Undo. #9 provides no snapshot or programmatic undo; show the keyboard undo hint for all-undoable batches. |
 | C37 | Large batch | inline card shows first 8 + "Review all 34 changes" | >20 changes | The full-height review view uses the same rows, grouped by sheet, with a sticky footer. The card summary keeps the risk badges. |
-| C38 | Risk acknowledgement | row-level note + optional checkbox | overwrite, dangerous function | The UI can show the risk; the policy (block, confirm, auto-apply) is #9's. If #9 requires explicit acknowledgement, the row gets a required checkbox and Apply stays disabled until it is ticked. |
+| C38 | Risk acknowledgement | card-level overwrite checkbox; row-level risk note; loss/confirm rows default excluded | overwrite, loss, confirm, blocked | #9 owns the policy. Apply stays disabled until the overwrite acknowledgement is ticked. Loss and confirm-tier rows start excluded and require ticking the row. Blocked rows are unselectable; protected/merged/pivot-output/spill-child reasons sit on the row. |
 
 ### 5.4 History and settings
 
@@ -549,7 +549,7 @@ Voice: specific, calm, second person, sentence case. Name the object and the con
 | Highlight changed cells + comments | **Keep** as the post-apply second line of defence | #9 owns the exact mechanism; the card is the pre-apply surface. |
 | No pre-apply diff | **Reject the omission** | Diff-first card; this is our differentiator. |
 | Batch approve, chevron hides the list | **Adapt** | The list is primary; the header still collapses for scanning. |
-| Ctrl+Z as undo | **Keep** | We do not intercept it; an optional in-pane undo is #9's call. |
+| Ctrl+Z as undo | **Keep** | We do not intercept it. #9 rules out an in-pane Undo button and snapshot; Ctrl+Z is the only undo. |
 | History app-scoped, 50 conversations | **Reject the scoping** | Per workbook first, all workbooks as an escape hatch; #11 owns storage and cap. |
 | Instructions per app | **Adapt** | Per workbook, one textarea, examples; #11 confirms the scope. |
 | Settings-only model picker | **Reject** | Model chip in the composer; Settings has the same control. |
@@ -590,7 +590,7 @@ app/
 
 **Rendering.** The pane is a single React root. Use `contain: layout paint` on the transcript; avoid measuring during streaming; tables and code blocks own their scroll. Set `data-theme` before mount from `matchMedia` + stored override. `prefers-reduced-motion` is read by CSS; no JS animation library.
 
-**Prototype scope.** Build the 8 states in the wireframe sheet with mock data and a `?state=` switch: `empty`, `streaming`, `review`, `partial`, `history`, `settings`, `narrow`, `error`. The prototype is clickable for: suggestions fill composer, send/stop, approval expand/collapse, include/exclude, apply progress, partial retry, history open, settings sections, theme toggle. The workbook is mocked; Office.js loading is not required for #13. Keep the exact 380 px and 260 px webview widths.
+**Prototype scope.** Build the wireframe states with mock data and a `?state=` switch; #13 extended them to ten presets: `empty`, `loading`, `streaming`, `answer`, `review`, `partial`, `applied`, `history`, `settings`, `error`. The prototype is clickable for: suggestions fill composer, send/stop, approval expand/collapse, include/exclude, apply progress, partial retry, history open, settings sections, theme toggle. The workbook is mocked; Office.js loading is not required for #13. Keep the exact 380 px and 260 px webview widths.
 
 **Performance budgets.** First paint < 300 ms in WebView2 on this machine; initial JS < 180 KB gzip; streaming commit ≤ 100 ms per frame at 10 fps; no horizontal page scroll at 240–720 px; no layout shift when the model chip loads.
 
@@ -605,9 +605,9 @@ app/
 | [#9](https://github.com/mustaphaelou/excel-agent/issues/9) | Approval policy, auto-apply tiers, undo/rollback, dangerous functions, audit, cell-edit retry | The card can render review / applied / partial; auto-applied is a compact variant; risky row notes are slots for #9's policy. |
 | [#10](https://github.com/mustaphaelou/excel-agent/issues/10) | Context assembly, citation encoding, hidden-sheet navigation, token budget | Citations are structured tokens; chips are buttons; hidden/protected sheets use the snackbar path. |
 | [#11](https://github.com/mustaphaelou/excel-agent/issues/11) | Storage, workbook identity, retention cap, instructions scope, compaction | History is per workbook with an "all" escape hatch; instructions are per workbook; no `Claude Log` sheet. |
-| [#12](https://github.com/mustaphaelou/excel-agent/issues/12) | Tool surface, SSE parsing, model catalog, status source, error codes, question cards | Status is tool-derived; model menu reads `/api/models`; decision card is optional; errors map to the copy deck. |
+| [#12](https://github.com/mustaphaelou/excel-agent/issues/12) | Tool surface, SSE parsing, model catalog, status source, error codes, question cards | Status is tool-derived; model menu reads `/api/models`; no `ask_user` tool, so v1 asks in prose; errors map to the copy deck. |
 | [#7](https://github.com/mustaphaelou/excel-agent/issues/7) | Default vs shared runtime | Default runtime. A global shortcut would require amending ADR 0001; it is not in v1. |
-| [#13](https://github.com/mustaphaelou/excel-agent/issues/13) | Framework, prototype scope, mock data | React 19 + TypeScript + Vite; 8 prototype states; 380/260 widths; no Office.js. |
+| [#13](https://github.com/mustaphaelou/excel-agent/issues/13) | Framework, prototype scope, mock data | Production React 19 + TypeScript + Vite; throwaway prototype had 10 scenario presets and 260/380/520/720 widths; no Office.js. |
 
 **Confirmed with the dev on 2026-11-07:**
 
@@ -634,7 +634,7 @@ app/
 
 ## 14. Annotated wireframes
 
-Open [08-wireframes.html](08-wireframes.html). Quick view: [contact sheet of all eight frames](assets/08-sheet-contact.jpg). Full sheet: [08-sheet-preview.jpg](assets/08-sheet-preview.jpg). The sheet contains:
+These are the **original A frames**; the validated B visual source is the [#13 prototype](https://github.com/mustaphaelou/excel-agent/tree/prototype/clickable-sidebar-13/docs/wayfinder/design/13-prototype), with the amendment at the top of this record. Do not implement the 44 px header or full-width user blocks from these frames. Open [08-wireframes.html](08-wireframes.html) only for the original A layout record. Quick view: [contact sheet of all eight frames](assets/08-sheet-contact.jpg). Full sheet: [08-sheet-preview.jpg](assets/08-sheet-preview.jpg). The sheet contains:
 
 1. **First run** — header, greeting, three suggestions, trust line, focused composer.
 2. **Streaming answer** — status line, markdown, table, inline citations, stop.
@@ -645,7 +645,7 @@ Open [08-wireframes.html](08-wireframes.html). Quick view: [contact sheet of all
 7. **Narrow, dark** — 260 px, warm charcoal, scrolling table, wrapped citations.
 8. **Connection lost** — health banner, timeout card, details, disabled composer.
 
-The frames are 1:1 CSS px at 380 px webview (260 px for frame 7). Annotation pins sit outside the pane so they never cover the UI. The sheet is static by design; #13 makes it clickable.
+The frames are 1:1 CSS px at 380 px webview (260 px for frame 7). Annotation pins sit outside the pane so they never cover the UI. The sheet is static and shows A; the #13 prototype was the clickable test and validated B.
 
 ---
 

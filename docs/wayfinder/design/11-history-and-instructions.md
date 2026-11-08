@@ -4,7 +4,7 @@
 
 ## Summary
 
-A conversation belongs to a workbook and outlives the pane. The backend owns one local store of plain JSON files under `%LOCALAPPDATA%\ExcelAgent\history\`; the pane owns nothing durable. Identity is the workbook's path — nothing is written into the workbook, so Save As starts a new thread and an old one is linked back by hand. The stored transcript is exactly what was sent to the gateway, so a resumed conversation is the same conversation. Instructions are one free-text field per workbook that only the user writes. Compaction is user-initiated and leaves a visible divider with the originals intact. Nothing is deleted without an explicit action.
+A conversation belongs to a workbook and outlives the pane. The backend owns one local store of plain JSON files under `%LOCALAPPDATA%\ExcelAgent\history\`; the pane owns nothing durable. Identity is the workbook's path — no identity marker is written into the workbook, so Save As starts a new thread and an old one is linked back by hand. The stored transcript is exactly the non-system messages sent to the gateway, tool results included; the system prompt and inventory are rebuilt on resume, so a resumed conversation is the same conversation. Instructions are one free-text field per workbook that only the user writes. Compaction is user-initiated and leaves a visible divider with the originals intact. Nothing is deleted without an explicit action.
 
 ### Decisions at a glance
 
@@ -24,9 +24,9 @@ A conversation belongs to a workbook and outlives the pane. The backend owns one
 ## 1. Invariants
 
 1. **One owner.** The backend owns every durable byte. The pane holds the live conversation in memory and writes it through; it keeps no second copy, so there is no divergence to reconcile.
-2. **The workbook is never written.** No file ID, no settings entry, no log sheet. The pane's only writes to a workbook go through #9's approval gate.
+2. **No hidden workbook state.** No file ID, no log sheet, and no settings entry except the explicit, opt-in auto-open switch ([#8 C48](08-sidebar-ux.md)). The auto-open switch is a user gesture, never agent-authored; every content write goes through #9's approval gate.
 3. **A conversation is never silently rewritten.** Compaction adds; deletion is explicit; linking moves only on a user click.
-4. **Reproducible context.** What is stored is what was sent. A resumed conversation sends the same bytes the live one did.
+4. **Reproducible turns.** The stored user/assistant/tool messages are exactly the non-system bytes sent. A resumed conversation replays them plus a fresh system prompt and inventory, not the system prompt that was live.
 5. **Nothing is deleted on a timer.** Retention is a warning, never a policy.
 6. **Instructions belong to the user.** No feature appends to them, and the API has no append verb.
 7. **The store is not a security boundary.** It is local, single-user, and readable by anything running as this user.
@@ -378,6 +378,7 @@ Voice unchanged from [#8 §9](08-sidebar-ux.md): specific, calm, second person, 
 - **No import, no cross-device sync, no search across workbooks** in v1.
 - **Linking is manual.** Save As and rename produce orphans by design; the picker is the only healing path.
 - **`document.url` is the only identity Office offers.** A workbook copied to another path is a different workbook.
+- **The auto-open setting is the one explicit workbook setting write.** It is opt-in, user-triggered, and not history; nothing else outside #9 writes to the workbook.
 
 ## 14. Owned elsewhere
 
