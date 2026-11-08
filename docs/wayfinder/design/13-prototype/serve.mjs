@@ -52,5 +52,5 @@ const server = http.createServer((req, res) => {
 
 server.listen(port, host, () => {
   console.log(`Excel Agent #13 prototype: http://${host}:${port}/?variant=hybrid&state=empty&width=380&theme=auto`);
-  console.log("Variants: hybrid, claude, fluent · Scenarios: empty, loading, streaming, answer, review, partial, applied, history, settings, error");
+  console.log("Variants: hybrid, claude, fluent · Scenarios: empty, loading, streaming, answer, review, partial, applied, history, settings, error, link, unsaved, compaction, compaction-progress, compaction-stacked, retention, retention-full, storefail, instructions, readonly, readonly-forced");
 });

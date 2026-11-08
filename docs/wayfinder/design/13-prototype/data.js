@@ -1,4 +1,4 @@
-// THROWAWAY PROTOTYPE data. Ticket #13.
+// THROWAWAY PROTOTYPE data. Tickets #13 and #16.
 // Everything here is mock data. No Office.js, gateway, or persistence.
 
 export const WORKBOOK = {
@@ -6,6 +6,37 @@ export const WORKBOOK = {
   path: "C:\\Users\\mustapha\\Documents\\Q3 Forecast.xlsx",
   modified: "Saved to this PC",
 };
+
+export const HISTORY_LIMIT_MB = 250;
+export const HISTORY_STORE_PATH = "C:\\Users\\mustapha\\AppData\\Local\\ExcelAgent\\history";
+
+export const HISTORY_WORKBOOKS = [
+  { key: "q3-forecast", name: "Q3 Forecast.xlsx", path: "C:\\Users\\mustapha\\Documents\\Q3 Forecast.xlsx", conversations: 5, sizeMb: 62 },
+  { key: "fy27-budget", name: "FY27 Budget.xlsx", path: "C:\\Users\\mustapha\\Documents\\FY27 Budget.xlsx", conversations: 3, sizeMb: 37 },
+  { key: "pricing-2026", name: "Pricing 2026.xlsx", path: "C:\\Users\\mustapha\\OneDrive\\Finance\\Pricing 2026.xlsx", conversations: 1, sizeMb: 21 },
+  { key: "board-pack", name: "Board Pack Q3.xlsx", path: "\\\\fileserver\\finance\\Board Pack Q3.xlsx", conversations: 1, sizeMb: 14 },
+  { key: "archive-2024", name: "Archive 2024.xlsx", path: "D:\\Archive\\Archive 2024.xlsx", conversations: 1, sizeMb: 18 },
+];
+
+export const HISTORY_WORKBOOKS_RETENTION = [
+  { key: "q3-forecast", name: "Q3 Forecast.xlsx", path: "C:\\Users\\mustapha\\Documents\\Q3 Forecast.xlsx", conversations: 5, sizeMb: 92 },
+  { key: "fy27-budget", name: "FY27 Budget.xlsx", path: "C:\\Users\\mustapha\\Documents\\FY27 Budget.xlsx", conversations: 3, sizeMb: 55 },
+  { key: "pricing-2026", name: "Pricing 2026.xlsx", path: "C:\\Users\\mustapha\\OneDrive\\Finance\\Pricing 2026.xlsx", conversations: 1, sizeMb: 27 },
+  { key: "board-pack", name: "Board Pack Q3.xlsx", path: "\\\\fileserver\\finance\\Board Pack Q3.xlsx", conversations: 1, sizeMb: 16 },
+  { key: "archive-2024", name: "Archive 2024.xlsx", path: "D:\\Archive\\Archive 2024.xlsx", conversations: 1, sizeMb: 15 },
+];
+
+export const HISTORY_WORKBOOKS_FULL = [
+  { key: "q3-forecast", name: "Q3 Forecast.xlsx", path: "C:\\Users\\mustapha\\Documents\\Q3 Forecast.xlsx", conversations: 5, sizeMb: 120 },
+  { key: "fy27-budget", name: "FY27 Budget.xlsx", path: "C:\\Users\\mustapha\\Documents\\FY27 Budget.xlsx", conversations: 3, sizeMb: 70 },
+  { key: "pricing-2026", name: "Pricing 2026.xlsx", path: "C:\\Users\\mustapha\\OneDrive\\Finance\\Pricing 2026.xlsx", conversations: 1, sizeMb: 30 },
+  { key: "board-pack", name: "Board Pack Q3.xlsx", path: "\\\\fileserver\\finance\\Board Pack Q3.xlsx", conversations: 1, sizeMb: 18 },
+  { key: "archive-2024", name: "Archive 2024.xlsx", path: "D:\\Archive\\Archive 2024.xlsx", conversations: 1, sizeMb: 20 },
+];
+
+export const INSTRUCTIONS_FROM_FY27 = `Use the FY27 driver table as the source of truth.
+Format currency as EUR for the European rows.
+Name the scenario and its owner in the first column.`;
 
 export const COLUMNS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"];
 
@@ -94,6 +125,17 @@ export const SCENARIOS = [
   { key: "history", label: "History" },
   { key: "settings", label: "Settings / instructions" },
   { key: "error", label: "Error / offline" },
+  { key: "link", label: "Link an old conversation" },
+  { key: "unsaved", label: "Unsaved workbook" },
+  { key: "compaction", label: "Compaction · 80%" },
+  { key: "compaction-progress", label: "Compaction · summarizing" },
+  { key: "compaction-stacked", label: "Compaction · second cut" },
+  { key: "retention", label: "History at 80%" },
+  { key: "retention-full", label: "History over budget" },
+  { key: "storefail", label: "History store failure" },
+  { key: "instructions", label: "Instructions copy chip" },
+  { key: "readonly", label: "Read-only mode" },
+  { key: "readonly-forced", label: "Read-only workbook" },
 ];
 
 export const MODELS = [
@@ -482,6 +524,27 @@ Bold column headers.
 Use EUR for currency.
 Always show the formula behind a total.`;
 
+export const COMPACTION_MESSAGES = [
+  { role: "user", text: "Why is Q3 revenue down when units are up?" },
+  { role: "assistant", text: "Unit volume is **up 8.2%**, but average selling price fell **10.4%**. The gap is price, not demand." },
+  { role: "user", text: "Where is the price fall concentrated?" },
+  { role: "assistant", text: "Enterprise carries most of it: [B22:F25](cite:Forecast!B22:F25) shows ASP down from **$339** to **$304**." },
+  { role: "user", text: "What about the other segments?" },
+  { role: "assistant", text: "Mid-market and SMB are down **5.3%** and **7.7%**. Public sector is down **2.6%**." },
+  { role: "user", text: "Is the index stale?" },
+  { role: "assistant", text: "Yes. [H8](cite:Forecast!H8) still applies **1.08**, while [Inputs!B2](cite:Inputs!B2) says **1.124**." },
+  { role: "user", text: "How much does that understate revenue?" },
+  { role: "assistant", text: "About **$126K** on the Q3 total, concentrated in Enterprise." },
+  { role: "user", text: "Which regions are affected?" },
+  { role: "assistant", text: "Europe and APAC are least affected. North America carries the Enterprise exposure." },
+  { role: "user", text: "Should we change the forecast?" },
+  { role: "assistant", text: "Yes: update [H8](cite:Forecast!H8) and refresh the revenue column, then compare the variance again." },
+  { role: "user", text: "What else should I check?" },
+  { role: "assistant", text: "Check the two hard-coded formulas in the revenue column and the FX inputs in [Inputs!B2](cite:Inputs!B2)." },
+  { role: "user", text: "Can you make those changes?" },
+  { role: "assistant", text: "I can stage them as a proposal. Review the diff before anything is written." },
+];
+
 export const CONVERSATIONS = [
   {
     id: "c-current",
@@ -489,9 +552,11 @@ export const CONVERSATIONS = [
     preview: "Unit volume is up 8.2%, but price is down 10.4%…",
     time: "2:14 PM",
     group: "Today",
+    date: "8 Nov 2026",
     count: 6,
     sheets: "Forecast",
     workbook: "Q3 Forecast.xlsx",
+    path: "C:\\Users\\mustapha\\Documents\\Q3 Forecast.xlsx",
     current: true,
     pending: false,
   },
@@ -501,9 +566,11 @@ export const CONVERSATIONS = [
     preview: "I’d normalise the headers and refresh the totals…",
     time: "11:02 AM",
     group: "Today",
+    date: "8 Nov 2026",
     count: 4,
     sheets: "Forecast",
     workbook: "Q3 Forecast.xlsx",
+    path: "C:\\Users\\mustapha\\Documents\\Q3 Forecast.xlsx",
     pending: true,
     scenario: "partial",
     thread: [
@@ -520,9 +587,11 @@ export const CONVERSATIONS = [
     preview: "Pivot created on a new sheet: Revenue by region.",
     time: "4:38 PM",
     group: "Yesterday",
+    date: "7 Nov 2026",
     count: 8,
     sheets: "Forecast, Regions",
     workbook: "Q3 Forecast.xlsx",
+    path: "C:\\Users\\mustapha\\Documents\\Q3 Forecast.xlsx",
     thread: [
       { role: "user", text: "Build a regional pivot by revenue." },
       {
@@ -537,9 +606,11 @@ export const CONVERSATIONS = [
     preview: "It uses a hard-coded 1.08 index, so Q3 is…",
     time: "9:15 AM",
     group: "Yesterday",
+    date: "7 Nov 2026",
     count: 3,
     sheets: "Forecast",
     workbook: "Q3 Forecast.xlsx",
+    path: "C:\\Users\\mustapha\\Documents\\Q3 Forecast.xlsx",
     thread: [
       { role: "user", text: "Check the H8 formula." },
       {
@@ -554,9 +625,11 @@ export const CONVERSATIONS = [
     preview: "The variance is driven by two accounts in Enterprise.",
     time: "Mon",
     group: "Earlier",
+    date: "3 Nov 2026",
     count: 5,
     sheets: "Forecast",
     workbook: "Q3 Forecast.xlsx",
+    path: "C:\\Users\\mustapha\\Documents\\Q3 Forecast.xlsx",
     thread: [
       { role: "user", text: "Where is the Q2 vs Q3 variance coming from?" },
       {
@@ -571,9 +644,11 @@ export const CONVERSATIONS = [
     preview: "Start with the driver table, then add the rollup.",
     time: "Oct 28",
     group: "Earlier",
+    date: "28 Oct 2026",
     count: 9,
     sheets: "Inputs",
     workbook: "FY27 Budget.xlsx",
+    path: "C:\\Users\\mustapha\\Documents\\FY27 Budget.xlsx",
     thread: [
       { role: "user", text: "Draft next year’s budget sheet." },
       {
@@ -588,14 +663,112 @@ export const CONVERSATIONS = [
     preview: "Two spellings of “Middle East” were merged…",
     time: "Oct 24",
     group: "Earlier",
+    date: "24 Oct 2026",
     count: 4,
     sheets: "Regions",
     workbook: "FY27 Budget.xlsx",
+    path: "C:\\Users\\mustapha\\Documents\\FY27 Budget.xlsx",
     thread: [
       { role: "user", text: "Normalise the region names." },
       {
         role: "assistant",
         text: "Two spellings of “Middle East” were merged, and **APAC** is now consistent across the workbook.",
+      },
+    ],
+  },
+  {
+    id: "c-headcount",
+    title: "Headcount plan for FY27",
+    preview: "The plan needs one more approver in each region.",
+    time: "Oct 21",
+    group: "Earlier",
+    date: "21 Oct 2026",
+    count: 6,
+    sheets: "Inputs",
+    workbook: "FY27 Budget.xlsx",
+    path: "C:\\Users\\mustapha\\Documents\\FY27 Budget.xlsx",
+    thread: [
+      { role: "user", text: "Review the FY27 headcount plan." },
+      {
+        role: "assistant",
+        text: "The plan needs one more approver in each region. The **Enterprise** line is the only one over its cap.",
+      },
+    ],
+  },
+  {
+    id: "c-pricing",
+    title: "Pricing model review",
+    preview: "Discount bands are still using the 2025 thresholds.",
+    time: "Oct 12",
+    group: "Earlier",
+    date: "12 Oct 2026",
+    count: 7,
+    sheets: "Pricing",
+    workbook: "Pricing 2026.xlsx",
+    path: "C:\\Users\\mustapha\\OneDrive\\Finance\\Pricing 2026.xlsx",
+    thread: [
+      { role: "user", text: "Review the pricing model." },
+      {
+        role: "assistant",
+        text: "Discount bands are still using the 2025 thresholds. The **Enterprise** band is the only one where the floor moved.",
+      },
+    ],
+  },
+  {
+    id: "c-board",
+    title: "Board pack variance notes",
+    preview: "Two commentary cells still say “pending”.",
+    time: "Oct 2",
+    group: "Earlier",
+    date: "2 Oct 2026",
+    count: 3,
+    sheets: "Summary",
+    workbook: "Board Pack Q3.xlsx",
+    path: "\\\\fileserver\\finance\\Board Pack Q3.xlsx",
+    thread: [
+      { role: "user", text: "Check the variance notes in the board pack." },
+      {
+        role: "assistant",
+        text: "Two commentary cells still say **pending**. The rest of the pack matches the Q3 close.",
+      },
+    ],
+  },
+  {
+    id: "c-archive",
+    title: "Year-end close notes",
+    preview: "The close checklist is complete except for the FX revaluation.",
+    time: "Sep 30",
+    group: "Earlier",
+    date: "30 Sep 2026",
+    count: 5,
+    sheets: "Close",
+    workbook: "Archive 2024.xlsx",
+    path: "D:\\Archive\\Archive 2024.xlsx",
+    thread: [
+      { role: "user", text: "Where did the year-end close stop?" },
+      {
+        role: "assistant",
+        text: "The close checklist is complete except for the **FX revaluation**, which is waiting on Treasury.",
+      },
+    ],
+  },
+  {
+    id: "c-recovered",
+    title: "Q2 close review",
+    preview: "Recovered from the last good copy after a store error.",
+    time: "2:09 PM",
+    group: "Today",
+    date: "8 Nov 2026",
+    count: 4,
+    sheets: "Forecast",
+    workbook: "Q3 Forecast.xlsx",
+    path: "C:\\Users\\mustapha\\Documents\\Q3 Forecast.xlsx",
+    recovered: true,
+    thread: [
+      { role: "user", text: "Review the Q2 close." },
+      {
+        role: "assistant",
+        text: "The Q2 close is consistent. The only exception is the **FX revaluation** row, which was posted after the lock.",
       },
     ],
   },

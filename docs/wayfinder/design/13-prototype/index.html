@@ -4,12 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<meta name="description" content="Throwaway clickable sidebar prototype for the Excel Agent Office.js task pane (wayfinder ticket #13).">
-<title>Excel Agent — clickable sidebar prototype (#13)</title>
+<meta name="description" content="Throwaway clickable sidebar prototype for the Excel Agent Office.js task pane (wayfinder tickets #13 and #16).">
+<title>Excel Agent — clickable sidebar prototype (#13/#16)</title>
 <!--
-  THROWAWAY PROTOTYPE — ticket #13.
+  THROWAWAY PROTOTYPE — tickets #13 and #16.
   One route. Three visual directions via ?variant=hybrid|claude|fluent.
-  Scenario presets via ?state=empty|loading|streaming|answer|review|applied|partial|history|settings|error.
+  Scenario presets via ?state=empty|loading|streaming|answer|review|applied|partial|history|settings|error
+  plus the #16 surfaces: link|unsaved|compaction|compaction-stacked|retention|retention-full|storefail|instructions|readonly|readonly-forced.
   Width via ?width=260|380|520|720. Theme via ?theme=auto|light|dark.
   Everything is mocked in the browser. No Office.js, gateway, or persistence.
 -->
@@ -48,6 +49,10 @@
     <symbol id="i-sort" viewBox="0 0 24 24"><path d="M8 5v14M4 15l4 4 4-4M16 19V5M12 9l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-filter" viewBox="0 0 24 24"><path d="M4 5h16l-6.5 7.5V20l-3-2v-5.5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></symbol>
     <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M14 11a5 5 0 0 0-7.1-.1l-2 2A5 5 0 0 0 12 20l1.1-1.1" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7.5V19a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V8.5a1 1 0 0 0-1-1h-7.5L10 5H4a1 1 0 0 0-1 1z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M4 20h16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M18.5 15.5l.7 2.3 2.3.7-2.3.7-.7 2.3-.7-2.3-2.3-.7 2.3-.7z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></symbol>
   </defs>
 </svg>
 

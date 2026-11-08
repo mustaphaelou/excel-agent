@@ -1,8 +1,14 @@
-// THROWAWAY PROTOTYPE — ticket #13.
+// THROWAWAY PROTOTYPE — tickets #13 and #16.
 // One route. Variants via ?variant=, scenarios via ?state=, width/theme via query.
 // No framework, no dependencies, no persistence. Everything is mocked.
 import {
   WORKBOOK,
+  HISTORY_LIMIT_MB,
+  HISTORY_STORE_PATH,
+  HISTORY_WORKBOOKS,
+  HISTORY_WORKBOOKS_RETENTION,
+  HISTORY_WORKBOOKS_FULL,
+  INSTRUCTIONS_FROM_FY27,
   COLUMNS,
   SHEETS,
   VARIANT_META,
@@ -16,6 +22,7 @@ import {
   ANSWER_MESSAGES,
   makeProposal,
   INSTRUCTIONS_DEFAULT,
+  COMPACTION_MESSAGES,
   CONVERSATIONS,
   COMMANDS,
 } from "./data.js";
@@ -90,6 +97,7 @@ function initialState() {
     focusAfter: null,
     scrollBottom: false,
     scrollToCard: false,
+    scrollViewTo: null,
     isScrolled: false,
     saveTimer: null,
     snackbarTimer: null,
@@ -97,12 +105,45 @@ function initialState() {
     applyTimer: null,
     lastPrompt: "",
     modelUpdatedAt: "just now",
+    // #16 safety and persistence surfaces
+    workbook: clone(WORKBOOK),
+    unsaved: false,
+    historyRows: clone(HISTORY_WORKBOOKS),
+    historyLimitMb: HISTORY_LIMIT_MB,
+    linkFilter: "",
+    linkFrom: "history",
+    lastLink: null,
+    compaction: null,
+    storeFailure: false,
+    historyNotice: null,
+    recoveredId: null,
+    instructionsSource: null,
     readOnly: false,
+    workbookReadOnly: false,
+    readOnlyJustSaved: false,
   };
 }
 
 let state = initialState();
 let scrollMemory = null;
+let viewScrollMemory = 0;
+let lastView = null;
+
+function workbook() {
+  return state.workbook;
+}
+
+function isReadOnly() {
+  return state.readOnly || state.workbookReadOnly;
+}
+
+function historyUsedMb() {
+  return state.historyRows.reduce((total, row) => total + row.sizeMb, 0);
+}
+
+function historyPercent() {
+  return Math.round((historyUsedMb() / state.historyLimitMb) * 100);
+}
 
 function resolveTheme() {
   if (state.themeMode === "auto") return prefersDark.matches ? "dark" : "light";
@@ -273,7 +314,7 @@ function renderExcelChrome() {
     <div class="excel-shell" data-theme="${theme}">
       <div class="excel-titlebar">
         <span class="excel-logo" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
-        <div class="excel-title">${escapeHtml(WORKBOOK.name)} <span>— ${escapeHtml(WORKBOOK.modified)}</span></div>
+        <div class="excel-title">${escapeHtml(workbook().name)} <span>— ${escapeHtml(workbook().modified)}</span></div>
         <div class="excel-search" aria-hidden="true">${icon("search")}<span>Search</span></div>
         <div class="excel-account" aria-hidden="true"><span class="excel-avatar">ME</span><span class="excel-name">Mustapha</span></div>
       </div>
@@ -490,6 +531,7 @@ function markdownToHtml(source, { partial = false } = {}) {
    ------------------------------------------------------------------------- */
 
 function renderPane() {
+  if (state.view === "link") return renderLinkView();
   if (state.view === "history") return renderHistoryView();
   if (state.view === "settings") return renderSettingsView();
   if (state.variant === "claude") return renderClaudeChat();
@@ -571,7 +613,7 @@ function composerPlaceholder() {
   if (proposalGatesComposer()) return state.proposal.status === "partial"
     ? "Retry or dismiss the remaining changes"
     : "Review the proposed changes above";
-  if (state.readOnly) return "Read-only mode — questions only";
+  if (isReadOnly()) return "Read-only mode — questions only";
   if (isStreaming()) return "Ask a follow-up…";
   return state.messages.length ? "Ask a follow-up…" : "Ask about this workbook…";
 }
@@ -582,7 +624,7 @@ function composerHint() {
   if (state.proposal?.status === "proposed") return { icon: "info", text: "Apply or discard to keep chatting." };
   if (state.proposal?.status === "partial") return { icon: "info", text: "Retry or dismiss the remaining changes." };
   if (isStreaming()) return { icon: "info", text: "Enter does nothing while a response is streaming. Esc stops it." };
-  if (state.readOnly) return { icon: "lock", text: "Read-only mode. Turn it off in the header to propose edits." };
+  if (isReadOnly()) return { icon: "lock", text: "Read-only mode. Edits are unavailable; questions still work." };
   return null;
 }
 
@@ -597,9 +639,21 @@ function renderNewChatButton() {
   return `<button class="icon-button" type="button" data-action="new-chat" aria-label="${escapeHtml(reason)}" title="${escapeHtml(reason)}"${disabled ? " disabled" : ""}>${icon("plus")}</button>`;
 }
 
+function renderReadOnlyChip() {
+  if (!isReadOnly()) return "";
+  const forced = state.workbookReadOnly;
+  const title = forced
+    ? "This workbook is open read-only. Questions only."
+    : "Read-only mode is on. Questions only. Open Settings to change it.";
+  return `<button class="readonly-chip" type="button" data-action="open-readonly-settings" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}">
+    ${icon("lock")}<span>Read-only</span>
+  </button>`;
+}
+
 function renderHeaderActions() {
   return `
     <div class="header-actions">
+      ${renderReadOnlyChip()}
       <button class="icon-button" type="button" data-action="open-history" aria-label="History" title="History">${icon("clock")}</button>
       ${renderNewChatButton()}
       <button class="icon-button" type="button" data-action="open-settings" aria-label="Settings" title="Settings">${icon("gear")}</button>
@@ -609,8 +663,8 @@ function renderHeaderActions() {
 function renderWorkbookButton() {
   return `<button class="workbook-button" type="button" data-action="toggle-workbook-menu" aria-haspopup="menu" aria-expanded="${state.workbookMenuOpen}">
     ${icon("file", "icon file-icon")}
-    <span class="workbook-name" title="${escapeHtml(WORKBOOK.path)}">${escapeHtml(WORKBOOK.name)}</span>
-    <span class="unsaved-dot" title="Unsaved changes" aria-label="Unsaved changes"></span>
+    <span class="workbook-name" title="${escapeHtml(workbook().path)}">${escapeHtml(workbook().name)}</span>
+    ${state.unsaved ? '<span class="unsaved-dot" title="Unsaved changes" aria-label="Unsaved changes"></span>' : ""}
     ${icon("chevron-down", "icon chevron")}
   </button>`;
 }
@@ -623,11 +677,13 @@ function renderHybridChat() {
         ${renderHeaderActions()}
       </header>
       ${renderWorkbookMenu()}
+      ${renderBudgetBanner()}
       ${renderBanner()}
       <div class="transcript" id="transcript" role="region" aria-label="Conversation" tabindex="0">
         <div class="transcript-inner">${renderTimeline()}</div>
       </div>
       ${renderSnackbarSlot()}
+      ${renderCompactionNotice()}
       ${renderComposer()}
     </div>`;
 }
@@ -638,18 +694,20 @@ function renderClaudeChat() {
       <div class="claude-topbar">
         ${renderWorkbookButton()}
         <div class="header-actions">
+          ${renderReadOnlyChip()}
           <button class="icon-button" type="button" data-action="open-history" aria-label="History" title="History">${icon("clock")}</button>
           ${renderNewChatButton()}
           <button class="icon-button" type="button" data-action="open-settings" aria-label="Settings" title="Settings">${icon("gear")}</button>
         </div>
       </div>
       ${renderWorkbookMenu()}
+      ${renderBudgetBanner()}
       ${renderBanner()}
       <div class="transcript claude-transcript" id="transcript" role="region" aria-label="Conversation" tabindex="0">
         <div class="transcript-inner">${renderTimeline()}</div>
       </div>
       ${renderSnackbarSlot()}
-      <div class="claude-composer-wrap">${renderComposer()}</div>
+      <div class="claude-composer-wrap">${renderCompactionNotice()}${renderComposer()}</div>
     </div>`;
 }
 
@@ -664,7 +722,7 @@ function renderFluentChat() {
           <span class="fluent-mark">${icon("grid")}</span>
           <div class="fluent-title-copy">
             <button class="fluent-workbook" type="button" data-action="toggle-workbook-menu" aria-haspopup="menu" aria-expanded="${state.workbookMenuOpen}">
-              ${escapeHtml(WORKBOOK.name)} ${icon("chevron-down", "icon icon-12")}
+              ${escapeHtml(workbook().name)} ${icon("chevron-down", "icon icon-12")}
             </button>
             <div class="fluent-subtitle"><span class="connection-dot"></span> ${state.offline ? "Disconnected" : "Connected"} · local agent</div>
           </div>
@@ -678,12 +736,14 @@ function renderFluentChat() {
         </div>
       </div>
       ${renderWorkbookMenu()}
+      ${renderBudgetBanner()}
       ${renderBanner()}
       <div class="transcript fluent-transcript" id="transcript" role="region" aria-label="Conversation" tabindex="0">
         ${isStreaming() ? '<div class="fluent-progress" aria-hidden="true"><span></span></div>' : ""}
         <div class="transcript-inner">${renderTimeline()}</div>
       </div>
       ${renderSnackbarSlot()}
+      ${renderCompactionNotice()}
       ${renderComposer(true)}
     </div>`;
 }
@@ -695,13 +755,17 @@ function renderWorkbookMenu() {
       <div class="menu-workbook">
         ${icon("file", "icon file-icon")}
         <div class="menu-workbook-copy">
-          <strong>${escapeHtml(WORKBOOK.name)}</strong>
-          <span title="${escapeHtml(WORKBOOK.path)}">${escapeHtml(WORKBOOK.path)}</span>
+          <strong>${escapeHtml(workbook().name)}</strong>
+          <span title="${escapeHtml(workbook().path)}">${escapeHtml(workbook().path || "Not saved yet")}</span>
         </div>
       </div>
       <div class="menu-separator"></div>
       <button class="menu-row" type="button" data-action="copy-path" role="menuitem">${icon("copy", "icon menu-icon")}<span>Copy full path</span></button>
       <button class="menu-row" type="button" data-action="open-instructions" role="menuitem">${icon("pen", "icon menu-icon")}<span>Instructions for this workbook</span></button>
+      <button class="menu-row" type="button" data-action="open-link" data-from="menu" role="menuitem" ${state.unsaved ? 'disabled title="Save the workbook first"' : ""}>
+        ${icon("link", "icon menu-icon")}<span>Link to an old conversation…</span>
+        ${state.unsaved ? `<span class="menu-hint">Save first</span>` : ""}
+      </button>
       <button class="menu-row" type="button" data-action="toggle-auto-open" role="menuitemcheckbox" aria-checked="${state.autoOpen}">
         ${icon("check", `icon menu-icon${state.autoOpen ? "" : " is-hidden"}`)}<span>Open with this workbook</span>
         <span class="menu-hint">${state.autoOpen ? "On" : "Off"}</span>
@@ -720,9 +784,78 @@ function renderBanner() {
     </div>`;
 }
 
+function renderBudgetBanner() {
+  const pct = historyPercent();
+  if (pct < 80) return "";
+  const over = pct >= 100;
+  const title = over
+    ? `History is over its ${state.historyLimitMb} MB budget.`
+    : `History is ${pct}% of its ${state.historyLimitMb} MB budget.`;
+  return `<div class="global-banner banner-${over ? "danger" : "warn"}" role="status">
+    ${icon(over ? "alert" : "info")}
+    <div class="banner-copy"><strong>${escapeHtml(title)}</strong>${over ? " Nothing is deleted automatically." : ""}</div>
+    <button class="banner-action" type="button" data-action="open-settings-history">Manage history</button>
+  </div>`;
+}
+
+function renderCompactionNotice() {
+  const compaction = state.compaction;
+  if (!compaction || !compaction.notice || state.view !== "chat") return "";
+  if (compaction.summarizing) {
+    return `<section class="compaction-notice is-summarizing" aria-label="Summarizing earlier turns" role="status">
+      ${icon("spark")}
+      <div class="compaction-copy">
+        <strong>Summarizing ${compaction.pending?.covered || 0} turns…</strong>
+        <span>Earlier turns stay in the transcript; this only changes what the model sees.</span>
+        <div class="compaction-progress" role="progressbar" aria-label="Summarizing earlier turns" aria-valuetext="In progress"><span></span></div>
+      </div>
+    </section>`;
+  }
+  return `<section class="compaction-notice" aria-label="Context compaction" role="status">
+    ${icon("spark")}
+    <div class="compaction-copy">
+      <strong>This chat is ${compaction.pct}% of the model’s context.</strong>
+      <span>Summarize earlier turns or start a new chat.</span>
+    </div>
+    <div class="compaction-actions">
+      <button class="button button-secondary button-small" type="button" data-action="summarize">Summarize earlier turns</button>
+      <button class="text-action compaction-new" type="button" data-action="new-chat">Start a new chat</button>
+    </div>
+  </section>`;
+}
+
+function renderCompactionDivider(cut, index) {
+  return `<div class="compaction-divider" role="separator" aria-label="Earlier ${cut.covered} turns summarized">
+    <span class="compaction-rule" aria-hidden="true"></span>
+    <div class="compaction-divider-copy">
+      <span>Earlier ${cut.covered} turns summarized</span>
+      <button class="text-action" type="button" data-action="toggle-original" data-cut="${index}" aria-expanded="${!!cut.expanded}">${cut.expanded ? "Hide original" : "View original"}</button>
+    </div>
+    <span class="compaction-rule" aria-hidden="true"></span>
+  </div>`;
+}
+
 function renderTimeline() {
   if (state.loading) return renderSkeleton();
-  const timeline = state.messages.map((message, index) => renderMessage(message, index));
+  const timeline = [];
+  const cuts = state.compaction?.cuts || [];
+  let index = 0;
+  while (index < state.messages.length) {
+    const cutIndex = cuts.findIndex((cut) => cut.start === index);
+    if (cutIndex !== -1) {
+      const cut = cuts[cutIndex];
+      timeline.push(renderCompactionDivider(cut, cutIndex));
+      if (cut.expanded) {
+        for (let original = cut.start; original < cut.end; original += 1) {
+          timeline.push(renderMessage(state.messages[original], original, { original: true }));
+        }
+      }
+      index = cut.end;
+      continue;
+    }
+    timeline.push(renderMessage(state.messages[index], index));
+    index += 1;
+  }
   if (state.proposal) timeline.push(String(renderProposal(state.proposal)));
   if (!timeline.length) timeline.push(renderEmptyState());
   return timeline.join("");
@@ -762,10 +895,10 @@ function renderEmptyState() {
     </div>`;
 }
 
-function renderMessage(message, index) {
+function renderMessage(message, index, options = {}) {
   if (message.role === "user") return renderUserMessage(message);
   if (message.role === "error") return renderErrorCard(message, index);
-  return renderAssistantMessage(message, index);
+  return renderAssistantMessage(message, index, options);
 }
 
 function renderUserMessage(message) {
@@ -785,19 +918,19 @@ function renderUserMessage(message) {
   return `<div class="user-turn"><div class="user-bubble">${body}</div></div>`;
 }
 
-function renderAssistantMessage(message, index) {
+function renderAssistantMessage(message, index, options = {}) {
   const live = !!message.streaming;
   const markdown = markdownToHtml(message.text || "", { partial: live });
   const body = `${markdown}${live ? '<span class="caret" aria-hidden="true"></span>' : ""}`;
   const status = renderStatusLine(message, index, live);
   const steps = message.showSteps ? renderStepList(message) : "";
-  const actions = !live ? renderMessageActions(message, index) : "";
+  const actions = !live && !options.original ? renderMessageActions(message, index) : "";
   const stopped = message.stopped ? `<div class="stopped-line">${icon("square")} Stopped. The partial answer is kept.</div>` : "";
   if (state.variant === "fluent") {
-    return `<div class="msg-row msg-assistant-row">
+    return `<div class="msg-row msg-assistant-row${options.original ? " is-original" : ""}">
       <span class="message-avatar agent-avatar" aria-hidden="true">${icon("grid")}</span>
       <div class="message-body">
-        <div class="message-meta"><span>Excel Agent</span><span class="message-time">${live ? "working" : "now"}</span></div>
+        <div class="message-meta"><span>Excel Agent</span><span class="message-time">${live ? "working" : options.original ? "original" : "now"}</span></div>
         ${status}${steps}
         <div class="markdown"${live ? ' id="liveBody"' : ""}>${body}</div>
         ${stopped}${actions}
@@ -805,7 +938,7 @@ function renderAssistantMessage(message, index) {
     </div>`;
   }
   const className = state.variant === "claude" ? "assistant-turn claude-assistant" : "assistant-turn";
-  return `<div class="${className}">
+  return `<div class="${className}${options.original ? " is-original" : ""}">
     ${status}${steps}
     <div class="markdown"${live ? ' id="liveBody"' : ""}>${body}</div>
     ${stopped}${actions}
@@ -1319,9 +1452,22 @@ function displayConversation(conversation) {
 }
 
 function visibleConversations() {
+  if (state.unsaved) return [];
   return state.conversations
-    .filter((conversation) => state.historyScope === "all" || conversation.workbook === WORKBOOK.name)
+    .filter((conversation) => state.historyScope === "all" || conversation.workbook === workbook().name)
     .map(displayConversation);
+}
+
+function renderHistoryNotice() {
+  if (!state.historyNotice) return "";
+  return `<div class="history-notice" role="status">
+    ${icon("alert")}
+    <div class="history-notice-copy">
+      <strong>${escapeHtml(state.historyNotice.title)}</strong>
+      <span>${escapeHtml(state.historyNotice.text)}</span>
+    </div>
+    ${state.historyNotice.action ? `<button class="text-action" type="button" data-action="${state.historyNotice.action}">${escapeHtml(state.historyNotice.actionLabel || "Open folder")}</button>` : ""}
+  </div>`;
 }
 
 function renderHistoryView() {
@@ -1330,11 +1476,14 @@ function renderHistoryView() {
   return `
     <div class="pane-view pane-view-history pane-view-${state.variant} view-${state.variant}" data-view="history">
       ${renderViewHeader("History", { action: "new-chat", actionLabel: "New chat", actionIcon: "plus" })}
+      ${renderBudgetBanner()}
+      ${renderBanner()}
       <div class="view-body history-body">
         <div class="scope-segmented" role="group" aria-label="History scope">
           <button class="scope-segment${state.historyScope === "workbook" ? " is-active" : ""}" type="button" data-action="history-scope" data-scope="workbook">This workbook</button>
           <button class="scope-segment${state.historyScope === "all" ? " is-active" : ""}" type="button" data-action="history-scope" data-scope="all">All workbooks</button>
         </div>
+        ${renderHistoryNotice()}
         ${rows.length ? groups.map((group) => {
           const groupRows = rows.filter((row) => row.group === group);
           if (!groupRows.length) return "";
@@ -1342,11 +1491,18 @@ function renderHistoryView() {
             <div class="history-group-label">${group}</div>
             ${groupRows.map((row) => renderHistoryRow(row)).join("")}
           </div>`;
-        }).join("") : `<div class="history-empty">
+        }).join("") : state.unsaved ? `<div class="history-empty">
+            <div class="empty-mark">${icon("lock")}</div>
+            <h2>History starts when you save this workbook</h2>
+            <p>This conversation is memory-only. If the pane closes before you save, the draft is gone.</p>
+            <button class="button button-secondary" type="button" disabled title="Save the workbook first">${icon("link")} Link an old conversation…</button>
+            <div class="history-empty-hint">Save the workbook first. Then this pane keeps its own history.</div>
+          </div>` : `<div class="history-empty">
             <div class="empty-mark">${icon("clock")}</div>
             <h2>No conversations yet</h2>
             <p>Your chats are saved automatically, per workbook.</p>
             <button class="button button-primary" type="button" data-action="new-chat">Start a chat</button>
+            <button class="button button-secondary history-link-button" type="button" data-action="open-link" data-from="history">${icon("link")} Link an old conversation…</button>
           </div>`}
       </div>
       ${renderSnackbarSlot()}
@@ -1360,23 +1516,111 @@ function renderHistoryView() {
 
 function renderHistoryRow(row) {
   const active = row.id === state.currentId;
-  const pending = row.pending;
   const menuOpen = state.rowMenuId === row.id;
+  const badges = [
+    row.pending ? `<span class="badge badge-warn">Pending</span>` : "",
+    row.recovered ? `<span class="badge badge-success">Recovered</span>` : "",
+    row.movedFrom ? `<span class="badge badge-muted">Moved here</span>` : "",
+  ].filter(Boolean).join("");
   return `<div class="history-row-wrap${menuOpen ? " has-menu" : ""}">
     <button class="history-row${active ? " is-active" : ""}" type="button" data-action="open-conversation" data-id="${escapeHtml(row.id)}" ${active ? 'aria-current="true"' : ""}>
       <span class="history-main">
         <span class="history-title-line"><span class="history-title">${escapeHtml(row.title)}</span><span class="history-time">${escapeHtml(row.time)}</span></span>
         <span class="history-preview">${escapeHtml(row.preview)}</span>
         <span class="history-meta">${row.count || 0} messages · ${escapeHtml(row.sheets || "Forecast")}${state.historyScope === "all" ? ` · ${escapeHtml(row.workbook)}` : ""}</span>
+        ${badges ? `<span class="history-badges">${badges}</span>` : ""}
       </span>
-      ${pending ? `<span class="badge badge-warn history-pending">Pending</span>` : ""}
     </button>
     <button class="history-more" type="button" data-action="row-menu" data-id="${escapeHtml(row.id)}" aria-label="More actions for ${escapeHtml(row.title)}" aria-expanded="${menuOpen}">${icon("more")}</button>
     ${menuOpen ? `<div class="row-menu" role="menu">
       <button class="menu-row" type="button" role="menuitem" data-action="rename-conversation" data-id="${escapeHtml(row.id)}">${icon("pen", "icon menu-icon")}<span>Rename</span></button>
+      <button class="menu-row" type="button" role="menuitem" data-action="export-conversation" data-id="${escapeHtml(row.id)}" data-format="md">${icon("download", "icon menu-icon")}<span>Export .md</span></button>
+      <button class="menu-row" type="button" role="menuitem" data-action="export-conversation" data-id="${escapeHtml(row.id)}" data-format="json">${icon("download", "icon menu-icon")}<span>Export .json</span></button>
+      ${row.movedFrom ? `<button class="menu-row" type="button" role="menuitem" data-action="unlink-conversation" data-id="${escapeHtml(row.id)}">${icon("link", "icon menu-icon")}<span>Move back to ${escapeHtml(row.movedFrom)}</span></button>` : ""}
+      <div class="menu-separator"></div>
       <button class="menu-row danger-text" type="button" role="menuitem" data-action="delete-conversation" data-id="${escapeHtml(row.id)}">${icon("x", "icon menu-icon")}<span>Delete</span></button>
     </div>` : ""}
   </div>`;
+}
+
+/* -------------------------------------------------------------------------
+   Link picker
+   ------------------------------------------------------------------------- */
+
+function linkableConversations() {
+  const query = state.linkFilter.trim().toLowerCase();
+  return state.conversations.filter((conversation) => {
+    if (conversation.workbook === workbook().name) return false;
+    if (!query) return true;
+    return [conversation.title, conversation.workbook, conversation.path, conversation.preview]
+      .some((value) => String(value || "").toLowerCase().includes(query));
+  });
+}
+
+function renderLinkList() {
+  if (state.unsaved) {
+    return `<div class="link-empty">
+      <div class="empty-mark">${icon("lock")}</div>
+      <h2>Save the workbook first</h2>
+      <p>Linking needs a saved workbook path. Your current draft stays in memory-only history until you save.</p>
+    </div>`;
+  }
+  const rows = linkableConversations();
+  if (!state.conversations.some((conversation) => conversation.workbook !== workbook().name)) {
+    return `<div class="link-empty">
+      <div class="empty-mark">${icon("link")}</div>
+      <h2>No other conversations yet</h2>
+      <p>Conversations from other workbooks appear here after they are saved.</p>
+    </div>`;
+  }
+  if (!rows.length) {
+    return `<div class="link-empty">
+      <div class="empty-mark">${icon("search")}</div>
+      <h2>No conversations match</h2>
+      <p>Try a workbook name or part of a path.</p>
+      <button class="button button-secondary button-small" type="button" data-action="clear-link-filter">Clear filter</button>
+    </div>`;
+  }
+  const groups = new Map();
+  for (const row of rows) {
+    const key = `${row.workbook}\u0000${row.path || ""}`;
+    if (!groups.has(key)) groups.set(key, { name: row.workbook, path: row.path || "", rows: [] });
+    groups.get(key).rows.push(row);
+  }
+  return [...groups.values()].map((group) => `<section class="link-group" aria-label="${escapeHtml(group.name)}">
+    <div class="link-group-head">
+      <strong>${escapeHtml(group.name)}</strong>
+      <span title="${escapeHtml(group.path)}">${escapeHtml(group.path)}</span>
+    </div>
+    ${group.rows.map((row) => `<div class="link-row">
+      <div class="link-row-main">
+        <div class="link-row-title">${escapeHtml(row.title)}</div>
+        <div class="link-row-path" title="${escapeHtml(row.path)}">${escapeHtml(row.path)}</div>
+        <div class="link-row-meta">${row.count || 0} messages · ${escapeHtml(row.sheets || "Forecast")} · ${escapeHtml(row.date || row.time || "")}</div>
+      </div>
+      <button class="button button-secondary button-small link-move" type="button" data-action="link-conversation" data-id="${escapeHtml(row.id)}">Move to this workbook</button>
+    </div>`).join("")}
+  </section>`).join("");
+}
+
+function renderLinkView() {
+  return `
+    <div class="pane-view pane-view-link pane-view-${state.variant} view-${state.variant}" data-view="link">
+      <header class="view-header">
+        <button class="icon-button" type="button" data-action="back-link" aria-label="Back">${icon("arrow-left")}</button>
+        <h1 class="view-title" id="viewTitle" tabindex="-1">Link to an old conversation</h1>
+        <span class="view-header-spacer"></span>
+      </header>
+      <div class="view-body link-body">
+        <p class="link-intro">Moves a conversation from another workbook. It is not copied, and you can move it back later.</p>
+        <label class="link-search">
+          ${icon("search")}
+          <input id="linkFilter" type="search" value="${escapeHtml(state.linkFilter)}" placeholder="Filter by path or name" aria-label="Filter conversations by path or name" autocomplete="off">
+        </label>
+        <div id="linkList">${renderLinkList()}</div>
+      </div>
+      ${renderSnackbarSlot()}
+    </div>`;
 }
 
 /* -------------------------------------------------------------------------
@@ -1384,16 +1628,34 @@ function renderHistoryRow(row) {
    ------------------------------------------------------------------------- */
 
 function renderSettingsView() {
-  const workbookConversations = state.conversations.filter((conversation) => conversation.workbook === WORKBOOK.name).length;
   const charCount = state.instructions.length;
   const savedLabel = state.instructionsState === "saving" ? "Saving…" : state.instructionsState === "error" ? "Not saved" : "Saved";
+  const usedMb = historyUsedMb();
+  const pct = historyPercent();
+  const totalConversations = state.historyRows.reduce((total, row) => total + row.conversations, 0);
+  const readOnlyForced = state.workbookReadOnly;
+  const readOnlyPending = !!state.proposal && proposalGatesComposer();
+  const readOnlyDisabled = readOnlyForced || readOnlyPending;
+  const readOnlyDescription = readOnlyForced
+    ? "Excel opened this workbook read-only, so edits are unavailable."
+    : readOnlyPending
+      ? "Apply or discard the pending changes before switching modes."
+      : "No edits or proposals. Reads and questions still work.";
+  const readOnlyFootnote = readOnlyForced
+    ? "Read-only mode is forced on by Excel and can’t be turned off here."
+    : "Saved with this workbook’s history; never written into the file.";
   return `
     <div class="pane-view pane-view-settings pane-view-${state.variant} view-${state.variant}" data-view="settings">
       ${renderViewHeader("Settings")}
+      ${renderBudgetBanner()}
+      ${renderBanner()}
       <div class="view-body settings-body">
         <div class="section-label">Instructions</div>
         <div class="settings-card settings-card-pad">
           <textarea class="instructions-input" id="instructions" rows="4" maxlength="8200" aria-label="Instructions for this workbook" placeholder="Format numbers with thousands separators. Bold column headers. Use € for currency.">${escapeHtml(state.instructions)}</textarea>
+          ${!state.instructions.trim() && state.instructionsSource ? `<button class="instructions-chip" type="button" data-action="copy-instructions">
+            ${icon("copy")}<span>Copy instructions from ${escapeHtml(state.instructionsSource.workbook)}</span>
+          </button>` : ""}
           <div class="settings-help"><span>Applies to every conversation in this workbook.</span><span class="saved-state" id="instructionsState">${savedLabel === "Saved" ? `${icon("check")} ` : ""}${savedLabel}</span></div>
           <div class="char-counter" id="instructionsCount">${charCount.toLocaleString()} / 8,000</div>
         </div>
@@ -1430,20 +1692,52 @@ function renderSettingsView() {
         <div class="section-label">Startup</div>
         <div class="settings-card">
           <div class="setting-row static-row">
-            <span class="setting-main"><span class="setting-label">Open with this workbook</span><span class="setting-desc">Adds a setting to ${escapeHtml(WORKBOOK.name)}. Off by default; turn it off here.</span></span>
-            <button class="switch${state.autoOpen ? " is-on" : ""}" type="button" role="switch" aria-checked="${state.autoOpen}" data-action="toggle-auto-open"><span></span></button>
+            <span class="setting-main"><span class="setting-label">Open with this workbook</span><span class="setting-desc">Adds a setting to ${escapeHtml(workbook().name)}. Off by default; turn it off here.</span></span>
+            <button class="switch${state.autoOpen ? " is-on" : ""}" type="button" role="switch" aria-checked="${state.autoOpen}" data-action="toggle-auto-open" aria-label="Open with this workbook"><span></span></button>
           </div>
         </div>
 
-        <div class="section-label">History</div>
-        <div class="settings-card">
+        <div class="section-label" id="editingSection" tabindex="-1">Editing</div>
+        <div class="settings-card" id="readOnlyCard">
           <div class="setting-row static-row">
-            <span class="setting-main"><span class="setting-label">${workbookConversations} conversation${workbookConversations === 1 ? "" : "s"} · 1.4 MB</span><span class="setting-desc">Stored in this local agent’s history folder.</span></span>
-            <button class="text-action primary-text" type="button" data-action="open-history">Manage</button>
+            <span class="setting-main">
+              <span class="setting-label">Read-only mode</span>
+              <span class="setting-desc">${readOnlyDescription}</span>
+              <span class="setting-desc setting-footnote">${readOnlyFootnote}</span>
+            </span>
+            <button id="readOnlySwitch" class="switch${isReadOnly() ? " is-on" : ""}${readOnlyDisabled ? " is-disabled" : ""}" type="button" role="switch" aria-checked="${isReadOnly()}" data-action="toggle-readonly" ${readOnlyDisabled ? "disabled" : ""} aria-label="Read-only mode"><span></span></button>
           </div>
-          <button class="setting-row destructive-row" type="button" data-action="delete-all">
-            <span class="setting-main"><span class="setting-label">Delete all history…</span><span class="setting-desc">Removes local transcripts and audit records. Workbook content is untouched.</span></span>
-          </button>
+          ${state.readOnlyJustSaved ? `<div class="settings-saved-row"><span class="saved-state">${icon("check")} Saved</span></div>` : ""}
+        </div>
+
+        <div class="section-label" id="historySection" tabindex="-1">History</div>
+        <div class="settings-card" id="historyCard">
+          <div class="history-usage">
+            <div class="history-usage-line"><strong>${usedMb} MB of ${state.historyLimitMb} MB</strong><span class="${pct >= 100 ? "danger-text" : ""}">${pct}%</span></div>
+            <div class="budget-track${pct >= 100 ? " is-over" : ""}" role="progressbar" aria-label="History budget" aria-valuemin="0" aria-valuemax="${state.historyLimitMb}" aria-valuenow="${Math.min(usedMb, state.historyLimitMb)}"><span style="width:${Math.min(100, pct)}%"></span></div>
+            <div class="history-usage-meta">${totalConversations} conversation${totalConversations === 1 ? "" : "s"} · Stored on this machine</div>
+          </div>
+          ${state.historyRows.length ? state.historyRows.map((row) => `<div class="setting-row static-row history-manage-row" data-history-key="${escapeHtml(row.key)}">
+            <span class="setting-main">
+              <span class="setting-label">${escapeHtml(row.name)}</span>
+              <span class="setting-desc history-path" title="${escapeHtml(row.path)}">${escapeHtml(row.path)}</span>
+              <span class="setting-desc">${row.conversations} conversation${row.conversations === 1 ? "" : "s"} · ${row.sizeMb} MB</span>
+            </span>
+            <button class="text-action danger-text" type="button" data-action="delete-workbook-history" data-key="${escapeHtml(row.key)}">Delete</button>
+          </div>`).join("") : `<div class="settings-empty">No local history. New conversations are saved automatically.</div>`}
+          <div class="history-settings-actions">
+            <button class="text-action" type="button" data-action="open-folder">${icon("folder")} Open folder</button>
+            <button class="text-action danger-text" type="button" data-action="delete-all" ${state.historyRows.length ? "" : "disabled"}>Delete all history…</button>
+          </div>
+        </div>
+
+        <div class="about-store">
+          <div class="about-store-head">${icon("folder")}<span>History folder</span></div>
+          <div class="about-store-path" title="${escapeHtml(HISTORY_STORE_PATH)}">${escapeHtml(HISTORY_STORE_PATH)}</div>
+          <div class="about-store-actions">
+            <button class="text-action" type="button" data-action="open-folder">Open folder</button>
+            <button class="text-action" type="button" data-action="copy-store-path">Copy path</button>
+          </div>
         </div>
 
         <div class="about-line"><span class="status-dot ${state.offline ? "is-error" : "is-done"}"></span> Excel Agent 0.1.0 · ${state.offline ? "service unreachable" : "localhost:3000"} · <button class="text-action" type="button" data-action="copy-details" data-copy="Excel Agent 0.1.0 · Excel 16.0 build 20527 · localhost:3000 · no gateway key in this prototype">Copy diagnostics</button></div>
@@ -1488,6 +1782,10 @@ function render() {
   const theme = resolveTheme();
   const currentTranscript = $("#transcript");
   if (currentTranscript) scrollMemory = currentTranscript.scrollTop;
+  const currentViewBody = $(".view-body");
+  if (lastView === state.view && currentViewBody) viewScrollMemory = currentViewBody.scrollTop;
+  else viewScrollMemory = 0;
+  lastView = state.view;
   document.documentElement.dataset.variant = state.variant;
   document.documentElement.dataset.theme = theme;
   document.documentElement.dataset.paneCompact = state.width <= 299 ? "true" : "false";
@@ -1540,6 +1838,23 @@ function afterRender() {
       if (!transcript || !card) return;
       const top = card.getBoundingClientRect().top - transcript.getBoundingClientRect().top + transcript.scrollTop;
       transcript.scrollTop = Math.max(0, top - 10);
+    });
+  }
+  if (state.scrollViewTo) {
+    const selector = state.scrollViewTo;
+    state.scrollViewTo = null;
+    requestAnimationFrame(() => {
+      const target = $(selector);
+      const body = $(".view-body");
+      if (!target || !body) return;
+      const top = target.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop;
+      body.scrollTop = Math.max(0, top - 10);
+      viewScrollMemory = body.scrollTop;
+    });
+  } else if (viewScrollMemory > 0) {
+    requestAnimationFrame(() => {
+      const body = $(".view-body");
+      if (body) body.scrollTop = viewScrollMemory;
     });
   }
   if (!shouldScrollBottom && !shouldScrollToCard && scrollMemory !== null) {
@@ -1628,10 +1943,33 @@ function reviewIntro() {
   };
 }
 
+function readonlyRefusal() {
+  return {
+    role: "assistant",
+    text: "I can’t stage an edit while read-only mode is on. Turn it off in Settings, then ask again — reads and questions still work.",
+    streaming: false,
+    status: { state: "done", label: "1 step · 0.8 s" },
+    steps: ["Checked workbook state"],
+    showSteps: false,
+    stopped: false,
+  };
+}
+
 function loadScenario(name, { initial = false } = {}) {
   clearAllTimers();
   state.scenario = SCENARIOS.some((scenario) => scenario.key === name) ? name : "empty";
-  state.view = state.scenario === "history" ? "history" : state.scenario === "settings" ? "settings" : "chat";
+  const viewByScenario = {
+    history: "history",
+    settings: "settings",
+    link: "link",
+    unsaved: "history",
+    retention: "settings",
+    "retention-full": "settings",
+    storefail: "history",
+    instructions: "settings",
+    "readonly-forced": "settings",
+  };
+  state.view = viewByScenario[state.scenario] || "chat";
   state.messages = [];
   state.proposal = null;
   state.loading = false;
@@ -1644,6 +1982,7 @@ function loadScenario(name, { initial = false } = {}) {
   state.focusAfter = null;
   state.scrollBottom = true;
   state.scrollToCard = false;
+  state.scrollViewTo = null;
   state.isScrolled = false;
   state.dialog = null;
   state.live = null;
@@ -1661,11 +2000,25 @@ function loadScenario(name, { initial = false } = {}) {
   state.instructions = INSTRUCTIONS_DEFAULT;
   state.instructionsState = "saved";
   state.autoOpen = false;
+  state.workbook = clone(WORKBOOK);
+  state.unsaved = false;
+  state.historyRows = clone(HISTORY_WORKBOOKS);
+  state.historyLimitMb = HISTORY_LIMIT_MB;
+  state.linkFilter = "";
+  state.linkFrom = "history";
+  state.lastLink = null;
+  state.compaction = null;
+  state.storeFailure = false;
+  state.historyNotice = null;
+  state.recoveredId = null;
+  state.instructionsSource = null;
   state.readOnly = false;
+  state.workbookReadOnly = false;
+  state.readOnlyJustSaved = false;
   state.sheets = clone(SHEETS);
   state.selection = { sheet: "Forecast", range: "B22:F25", active: "B22" };
   state.excelStatus = "Ready";
-  state.conversations = clone(CONVERSATIONS);
+  state.conversations = clone(CONVERSATIONS).filter((conversation) => conversation.id !== "c-recovered");
   state.currentId = "c-current";
   state.historyScope = "workbook";
   state.lastPrompt = QUESTION;
@@ -1737,11 +2090,112 @@ function loadScenario(name, { initial = false } = {}) {
         actionLabel: "Retry now",
       };
       break;
+    case "link":
+      state.messages = decorateAnswerMessages();
+      state.focusAfter = "#linkFilter";
+      break;
+    case "unsaved":
+      state.workbook = { name: "Book1", path: "", modified: "Not saved yet" };
+      state.unsaved = true;
+      state.messages = [];
+      state.focusAfter = "#viewTitle";
+      break;
+    case "compaction":
+      state.messages = decorateThreadMessages(COMPACTION_MESSAGES);
+      state.compaction = {
+        pct: 82,
+        notice: true,
+        summarizing: false,
+        cuts: [],
+        pending: { start: 0, end: 12, covered: 12 },
+      };
+      state.focusAfter = "#composer";
+      state.scrollBottom = true;
+      break;
+    case "compaction-progress":
+      state.messages = decorateThreadMessages(COMPACTION_MESSAGES);
+      state.compaction = {
+        pct: 82,
+        notice: true,
+        summarizing: true,
+        cuts: [],
+        pending: { start: 0, end: 12, covered: 12 },
+      };
+      state.focusAfter = ".compaction-notice";
+      state.scrollBottom = true;
+      break;
+    case "compaction-stacked":
+      state.messages = decorateThreadMessages(COMPACTION_MESSAGES);
+      state.compaction = {
+        pct: 84,
+        notice: true,
+        summarizing: false,
+        cuts: [{ start: 0, end: 12, covered: 12, expanded: false, summary: "Earlier decisions, findings and the ranges that matter." }],
+        pending: { start: 12, end: 16, covered: 4 },
+      };
+      state.focusAfter = "#composer";
+      state.scrollBottom = true;
+      break;
+    case "retention":
+      state.messages = decorateAnswerMessages();
+      state.historyRows = clone(HISTORY_WORKBOOKS_RETENTION);
+      state.focusAfter = "#historySection";
+      state.scrollViewTo = "#historySection";
+      break;
+    case "retention-full":
+      state.messages = decorateAnswerMessages();
+      state.historyRows = clone(HISTORY_WORKBOOKS_FULL);
+      state.focusAfter = "#historySection";
+      state.scrollViewTo = "#historySection";
+      break;
+    case "storefail": {
+      const recovered = CONVERSATIONS.find((conversation) => conversation.id === "c-recovered");
+      if (recovered) state.conversations.unshift(clone(recovered));
+      state.messages = decorateAnswerMessages();
+      state.storeFailure = true;
+      state.recoveredId = "c-recovered";
+      state.banner = {
+        tone: "warn",
+        title: "History isn’t being saved.",
+        text: "Your conversation is still open.",
+        action: "retry-store",
+        actionLabel: "Retry",
+      };
+      state.historyNotice = {
+        title: "1 conversation couldn’t be read.",
+        text: "It was set aside as 6f1c8e2a-3b7d-4f1a-9c2e-0a1b2c3d4e5f.json.bad.",
+        action: "open-folder",
+        actionLabel: "Open folder",
+      };
+      state.focusAfter = "#viewTitle";
+      break;
+    }
+    case "instructions":
+      state.messages = decorateAnswerMessages();
+      state.instructions = "";
+      state.instructionsSource = { workbook: "FY27 Budget.xlsx", text: INSTRUCTIONS_FROM_FY27 };
+      state.focusAfter = "#instructions";
+      state.scrollViewTo = "#instructions";
+      break;
+    case "readonly":
+      state.messages = decorateAnswerMessages();
+      state.messages.push({ role: "user", text: CLEANUP_PROMPT });
+      state.messages.push(readonlyRefusal());
+      state.readOnly = true;
+      state.focusAfter = "#composer";
+      state.scrollBottom = true;
+      break;
+    case "readonly-forced":
+      state.messages = decorateAnswerMessages();
+      state.workbookReadOnly = true;
+      state.focusAfter = "#readOnlySwitch";
+      state.scrollViewTo = "#editingSection";
+      break;
     default:
       break;
   }
 
-  if (state.scenario === "history" || state.scenario === "settings") state.scrollBottom = false;
+  if (state.view !== "chat") state.scrollBottom = false;
   if (state.scenario === "review" || state.scenario === "partial" || state.scenario === "applied") {
     state.lastPrompt = CLEANUP_PROMPT;
     state.currentId = "c-current";
@@ -1932,7 +2386,8 @@ function ensureCurrentConversation() {
     group: "Today",
     count: 0,
     sheets: "Forecast",
-    workbook: WORKBOOK.name,
+    workbook: workbook().name,
+    path: workbook().path,
     current: false,
     pending: false,
   };
@@ -2170,6 +2625,7 @@ function loadConversation(target) {
   state.currentId = target.id;
   state.messages = target._messages ? clone(target._messages) : decorateThreadMessages(target.thread || []);
   state.proposal = target._proposal ? clone(target._proposal) : target.scenario === "partial" ? makeProposal("partial") : null;
+  state.compaction = null;
   state.view = "chat";
   state.loading = false;
   state.offline = false;
@@ -2191,7 +2647,7 @@ function openConversation(id) {
   }
   const target = state.conversations.find((conversation) => conversation.id === id);
   if (!target) return;
-  if (target.workbook !== WORKBOOK.name) {
+  if (target.workbook !== workbook().name) {
     showSnackbar(`That conversation belongs to ${target.workbook}. Open that workbook to continue it.`, { tone: "warn" });
     return;
   }
@@ -2236,13 +2692,15 @@ function startNewChat() {
     group: "Today",
     count: 0,
     sheets: "Forecast",
-    workbook: WORKBOOK.name,
+    workbook: workbook().name,
+    path: workbook().path,
     current: false,
     pending: false,
   });
   state.currentId = id;
   state.messages = [];
   state.proposal = null;
+  state.compaction = null;
   state.view = "chat";
   state.composerText = "";
   state.offline = false;
@@ -2323,20 +2781,23 @@ function deleteConversation(id) {
 }
 
 function deleteAllHistory() {
-  const count = state.conversations.length;
+  const count = state.historyRows.reduce((total, row) => total + row.conversations, 0);
+  const size = historyUsedMb();
   if (!count) return;
   openDialog({
     title: `Delete all ${count} conversations?`,
-    body: "This removes local transcripts and audit records. Workbook content is not changed. It can’t be undone.",
+    body: `This removes ${size} MB of local transcripts and audit records. Workbook content is not changed. It can’t be undone.`,
     confirmLabel: "Delete all",
     danger: true,
     onConfirm: () => {
       state.conversations = [];
+      state.historyRows = [];
       state.currentId = null;
       state.messages = [];
       state.proposal = null;
-      state.view = "history";
-      state.scenario = "history";
+      state.view = state.view === "settings" ? "settings" : "history";
+      state.scenario = state.view === "settings" ? "settings" : "history";
+      state.scrollViewTo = state.view === "settings" ? "#historySection" : null;
       state.focusAfter = "#viewTitle";
       syncUrl();
       render();
@@ -2428,6 +2889,8 @@ async function copyText(text) {
 
 function openHistory() {
   state.view = "history";
+  state.scenario = "history";
+  syncUrl();
   state.modelMenuOpen = false;
   state.workbookMenuOpen = false;
   state.settingsModelOpen = false;
@@ -2437,20 +2900,50 @@ function openHistory() {
   announce("History");
 }
 
-function openSettings() {
+function openSettings(section = null) {
   state.view = "settings";
+  state.scenario = "settings";
+  syncUrl();
   state.modelMenuOpen = false;
   state.workbookMenuOpen = false;
   state.rowMenuId = null;
-  state.focusAfter = "#viewTitle";
+  state.settingsModelOpen = false;
+  state.scrollViewTo = section === "history" ? "#historySection" : null;
+  state.focusAfter = section === "history" ? "#historySection" : "#viewTitle";
   render();
   announce("Settings");
 }
 
+function openLink(from = "history") {
+  if (state.unsaved) {
+    showSnackbar("Save the workbook first.", { tone: "warn" });
+    return;
+  }
+  state.view = "link";
+  state.scenario = "link";
+  state.linkFrom = from;
+  syncUrl();
+  state.workbookMenuOpen = false;
+  state.modelMenuOpen = false;
+  state.rowMenuId = null;
+  state.linkFilter = "";
+  state.focusAfter = "#linkFilter";
+  render();
+  announce("Link to an old conversation");
+}
+
+function backFromLink() {
+  if (state.linkFrom === "menu") backToChat();
+  else openHistory();
+}
+
 function openInstructions() {
   state.view = "settings";
+  state.scenario = "settings";
+  syncUrl();
   state.workbookMenuOpen = false;
   state.settingsModelOpen = false;
+  state.scrollViewTo = null;
   state.focusAfter = "#instructions";
   render();
   announce("Instructions for this workbook");
@@ -2458,7 +2951,7 @@ function openInstructions() {
 
 function backToChat() {
   state.view = "chat";
-  if (state.scenario === "history" || state.scenario === "settings") {
+  if (["history", "settings", "link"].includes(state.scenario)) {
     state.scenario = scenarioForProposal(state.proposal) || (state.messages.length ? "answer" : "empty");
     syncUrl();
   }
@@ -2466,6 +2959,211 @@ function backToChat() {
   state.scrollBottom = true;
   render();
   announce("Conversation");
+}
+
+/* -------------------------------------------------------------------------
+   #16: linking, history budget, store failure, compaction, read-only
+   ------------------------------------------------------------------------- */
+
+function linkConversation(id) {
+  const target = state.conversations.find((conversation) => conversation.id === id);
+  if (!target || target.workbook === workbook().name) return;
+  const previous = {
+    workbook: target.workbook,
+    path: target.path,
+    group: target.group,
+    time: target.time,
+    date: target.date,
+  };
+  target.workbook = workbook().name;
+  target.path = workbook().path;
+  target.group = "Today";
+  target.time = "Just now";
+  target.date = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  target.movedFrom = previous.workbook;
+  target.movedFromPath = previous.path;
+  target.movedFromGroup = previous.group;
+  target.movedFromTime = previous.time;
+  target.movedFromDate = previous.date;
+  state.lastLink = { id, previous };
+  state.focusAfter = "#linkFilter";
+  render();
+  showSnackbar("Moved to this workbook.", {
+    tone: "success",
+    duration: 8000,
+    action: { label: "Undo", run: undoLastLink },
+  });
+  announce(`Moved ${target.title} to this workbook`);
+}
+
+function restoreLink(id) {
+  const target = state.conversations.find((conversation) => conversation.id === id);
+  const previous = state.lastLink?.id === id ? state.lastLink.previous : null;
+  if (!target || !target.movedFrom) return null;
+  const original = previous || {
+    workbook: target.movedFrom,
+    path: target.movedFromPath || "",
+    group: target.movedFromGroup || "Earlier",
+    time: target.movedFromTime || "—",
+    date: target.movedFromDate || "",
+  };
+  const from = target.movedFrom;
+  target.workbook = original.workbook;
+  target.path = original.path;
+  target.group = original.group;
+  target.time = original.time;
+  target.date = original.date;
+  delete target.movedFrom;
+  delete target.movedFromPath;
+  delete target.movedFromGroup;
+  delete target.movedFromTime;
+  delete target.movedFromDate;
+  if (state.lastLink?.id === id) state.lastLink = null;
+  return from;
+}
+
+function undoLastLink() {
+  const id = state.lastLink?.id;
+  if (!id) return;
+  const from = restoreLink(id);
+  state.focusAfter = "#linkFilter";
+  render();
+  showSnackbar(`Moved back to ${from}.`, { tone: "neutral" });
+  announce(`Moved back to ${from}`);
+}
+
+function unlinkConversation(id) {
+  const from = restoreLink(id);
+  state.rowMenuId = null;
+  if (!from) return;
+  render();
+  showSnackbar(`Moved back to ${from}.`, { tone: "neutral" });
+  announce(`Moved back to ${from}`);
+}
+
+function openFolder() {
+  showSnackbar(`Opened ${HISTORY_STORE_PATH}.`, { tone: "neutral" });
+  announce("Opened the history folder");
+}
+
+function copyStorePath() {
+  copyText(HISTORY_STORE_PATH);
+}
+
+function exportConversation(id, format) {
+  const target = state.conversations.find((conversation) => conversation.id === id);
+  if (!target) return;
+  state.rowMenuId = null;
+  const safe = target.title.replace(/[\\/:*?"<>|]/g, "-");
+  render();
+  showSnackbar(`Exported ${safe}.${format}.`, { tone: "success" });
+  announce(`Exported ${target.title} as ${format}`);
+}
+
+function deleteWorkbookHistory(key) {
+  const row = state.historyRows.find((item) => item.key === key);
+  if (!row) return;
+  openDialog({
+    title: `Delete ${row.conversations} conversation${row.conversations === 1 ? "" : "s"}?`,
+    body: `This removes ${row.sizeMb} MB from ${row.name}. Workbook content is not changed. It can’t be undone.`,
+    confirmLabel: "Delete",
+    danger: true,
+    onConfirm: () => {
+      state.conversations = state.conversations.filter((conversation) => conversation.workbook !== row.name);
+      state.historyRows = state.historyRows.filter((item) => item.key !== key);
+      if (state.historyRows.length === 0) {
+        state.currentId = null;
+        state.messages = [];
+        state.proposal = null;
+      }
+      state.view = "settings";
+      state.scenario = "retention";
+      state.scrollViewTo = "#historySection";
+      state.focusAfter = "#historySection";
+      syncUrl();
+      render();
+      showSnackbar(`Deleted ${row.name} from local history.`, { tone: "neutral" });
+      announce(`Deleted history for ${row.name}`);
+    },
+  });
+}
+
+function retryStore() {
+  state.storeFailure = false;
+  state.banner = null;
+  render();
+  showSnackbar("History is being saved again.", { tone: "success" });
+  announce("History is being saved again");
+}
+
+function summarizeCompaction() {
+  const compaction = state.compaction;
+  if (!compaction || compaction.summarizing) return;
+  compaction.summarizing = true;
+  state.focusAfter = ".compaction-notice";
+  render();
+  announce(`Summarizing ${compaction.pending?.covered || 0} turns`);
+  window.setTimeout(() => {
+    if (!state.compaction || state.compaction !== compaction) return;
+    if (compaction.pending) {
+      compaction.cuts.push({
+        start: compaction.pending.start,
+        end: compaction.pending.end,
+        covered: compaction.pending.covered,
+        expanded: false,
+        summary: "Earlier decisions, findings and the ranges that matter.",
+      });
+    }
+    compaction.summarizing = false;
+    compaction.notice = false;
+    compaction.pending = null;
+    state.focusAfter = '[data-action="toggle-original"]';
+    syncUrl();
+    render();
+    showSnackbar("Earlier turns summarized. The originals are still here.", { tone: "success" });
+    announce("Earlier turns summarized; originals kept");
+  }, 2600);
+}
+
+function toggleOriginal(cutIndex) {
+  if (!state.compaction?.cuts?.[cutIndex]) return;
+  const cut = state.compaction.cuts[cutIndex];
+  cut.expanded = !cut.expanded;
+  state.focusAfter = `[data-action="toggle-original"][data-cut="${cutIndex}"]`;
+  render();
+  announce(cut.expanded ? "Original turns shown read-only" : "Original turns hidden");
+}
+
+function copyInstructions() {
+  const source = state.instructionsSource;
+  if (!source) return;
+  state.instructions = source.text;
+  state.instructionsSource = null;
+  state.instructionsState = "saved";
+  state.focusAfter = "#instructions";
+  render();
+  showSnackbar(`Copied instructions from ${source.workbook}.`, { tone: "success" });
+  announce("Instructions copied");
+}
+
+function toggleReadOnly() {
+  if (state.workbookReadOnly) {
+    showSnackbar("This workbook is open read-only.", { tone: "warn" });
+    return;
+  }
+  if (state.proposal && proposalGatesComposer()) {
+    showSnackbar("Apply or discard the pending changes first.", { tone: "warn" });
+    return;
+  }
+  state.readOnly = !state.readOnly;
+  state.readOnlyJustSaved = true;
+  state.focusAfter = "#readOnlySwitch";
+  render();
+  showSnackbar(
+    state.readOnly ? "Read-only mode on. Edits are unavailable." : "Read-only mode off. Edits are available.",
+    { tone: "success" },
+  );
+  announce(state.readOnly ? "Read-only mode on" : "Read-only mode off");
 }
 
 function setTheme(mode) {
@@ -2484,8 +3182,8 @@ function toggleAutoOpen() {
   render();
   showSnackbar(
     state.autoOpen
-      ? `Added Office.AutoShowTaskpaneWithDocument to ${WORKBOOK.name}.`
-      : `Removed the auto-open setting from ${WORKBOOK.name}.`,
+      ? `Added Office.AutoShowTaskpaneWithDocument to ${workbook().name}.`
+      : `Removed the auto-open setting from ${workbook().name}.`,
     { tone: state.autoOpen ? "success" : "neutral" },
   );
   announce(`Open with workbook ${state.autoOpen ? "on" : "off"}`);
@@ -2565,7 +3263,7 @@ function handleAction(element) {
     case "copy-path":
       state.workbookMenuOpen = false;
       render();
-      copyText(WORKBOOK.path);
+      copyText(workbook().path);
       break;
     case "open-instructions":
       openInstructions();
@@ -2578,6 +3276,59 @@ function handleAction(element) {
       break;
     case "open-settings":
       openSettings();
+      break;
+    case "open-settings-history":
+      openSettings("history");
+      break;
+    case "open-readonly-settings":
+      openSettings();
+      state.scrollViewTo = "#editingSection";
+      state.focusAfter = "#readOnlySwitch";
+      render();
+      break;
+    case "open-link":
+      openLink(element.dataset.from || "history");
+      break;
+    case "back-link":
+      backFromLink();
+      break;
+    case "clear-link-filter":
+      state.linkFilter = "";
+      state.focusAfter = "#linkFilter";
+      render();
+      break;
+    case "link-conversation":
+      linkConversation(element.dataset.id);
+      break;
+    case "unlink-conversation":
+      unlinkConversation(element.dataset.id);
+      break;
+    case "export-conversation":
+      exportConversation(element.dataset.id, element.dataset.format || "md");
+      break;
+    case "delete-workbook-history":
+      deleteWorkbookHistory(element.dataset.key);
+      break;
+    case "open-folder":
+      openFolder();
+      break;
+    case "copy-store-path":
+      copyStorePath();
+      break;
+    case "retry-store":
+      retryStore();
+      break;
+    case "summarize":
+      summarizeCompaction();
+      break;
+    case "toggle-original":
+      toggleOriginal(Number(element.dataset.cut));
+      break;
+    case "copy-instructions":
+      copyInstructions();
+      break;
+    case "toggle-readonly":
+      toggleReadOnly();
       break;
     case "back-to-chat":
       backToChat();
@@ -2807,6 +3558,12 @@ function handleClick(event) {
 }
 
 function handleInput(event) {
+  if (event.target.id === "linkFilter") {
+    state.linkFilter = event.target.value;
+    const list = $("#linkList");
+    if (list) list.innerHTML = renderLinkList();
+    return;
+  }
   if (event.target.id === "composer") {
     state.composerText = event.target.value;
     autoGrowComposer();
@@ -2914,6 +3671,10 @@ function handleKeydown(event) {
 }
 
 function handleScroll(event) {
+  if (event.target.classList?.contains("view-body")) {
+    viewScrollMemory = event.target.scrollTop;
+    return;
+  }
   if (!event.target.classList?.contains("transcript")) return;
   const scrolled = event.target.scrollTop > 0;
   state.isScrolled = scrolled;
