@@ -1,17 +1,20 @@
 # Sidebar UX and visual language
 
 Ticket: [#8 Sidebar UX and visual language](https://github.com/mustaphaelou/excel-agent/issues/8)
-Status: decided · 2026-11-07
+Status: decided 2026-11-07 · amended 2026-11-08 after the #13 prototype
 Companion: [annotated wireframe sheet](08-wireframes.html) (open it in a browser; frames are 1:1 CSS px)
 Depends on: [#2](https://github.com/mustaphaelou/excel-agent/issues/2) (capability envelope), [#5](https://github.com/mustaphaelou/excel-agent/issues/5) (Claude teardown), [#6](https://github.com/mustaphaelou/excel-agent/issues/6) (sideload spike), [#7](https://github.com/mustaphaelou/excel-agent/issues/7) (runtime, [ADR 0001](../../adr/0001-runtime-topology.md))
 
-This record settles the pane's information architecture, visual language, components, states and keyboard behaviour. It is written to be implemented by the prototype ticket [#13](https://github.com/mustaphaelou/excel-agent/issues/13): every measurement, token, state and piece of copy below is meant to be used, not interpreted.
+This record settles the pane's information architecture, visual language, components, states and keyboard behaviour. It is written to be implemented by the prototype ticket [#13](https://github.com/mustaphaelou/excel-agent/issues/13): every measurement, token, state and piece of copy below is meant to be used, not interpreted. The visual direction was validated by the prototype on 2026-11-08; see the amendment at the end of the Answer where it supersedes the original measurements.
 
 ---
 
 ## Answer
 
 **Direction: a warm paper conversation column inside a Fluent pane.** Fluent supplies the geometry, control sizing, focus behaviour and host integration; Claude supplies the reading surface, the serif run-ins, the one-accent discipline and the inline evidence chips. The result is neither a Claude reskin nor an Excel command panel.
+
+> **Prototype verdict — 2026-11-08.** The clickable prototype ([#13](https://github.com/mustaphaelou/excel-agent/issues/13)) was reviewed by the dev, who selected **B — Claude-close**. This supersedes the shell, user-turn, empty-state, composer, edit-card and view-header layout in §§2–5 below; the safety, state, history, copy, keyboard and accessibility contracts stand. The full amendment is at the end of this Answer.
+
 
 1. **The pane is a reading column, not a second spreadsheet.** One column, max 720 px of content, 16 px gutters at the standard width, 48 characters per line at 380 px. The grid is the canvas; citations and edit range chips are the only bridge to it.
 2. **Warm paper, one accent.** Surface `#FAF9F5` / ink `#1B1A18`; cool blue is reserved for evidence; terracotta is reserved for action. Excel green is not used inside the pane — it would read as a host command and collapse the evidence/action distinction.
@@ -25,6 +28,26 @@ This record settles the pane's information architecture, visual language, compon
 10. **No global keyboard shortcut in v1.** Office add-in shortcuts require SharedRuntime 1.1, and ADR 0001 chose the default task-pane runtime. Ribbon + Home > Add-ins + opt-in auto-open are the entry points. This is the one place where matching Claude costs an architectural reversal; it is called out for the dev rather than smuggled in.
 11. **Auto-open is opt-in and discloses the write.** Settings → Startup sets `Office.AutoShowTaskpaneWithDocument` for this workbook (`settings.set` + `saveAsync`). Off by default, reversible, disabled for unsaved workbooks. The pane remains closable; `locked` is ignored by Excel and is not a pinning substitute.
 12. **The design is a token system, not adjectives.** The light and dark palettes, type ramp, 4 px spacing, radii, motion and focus rules in §3 are the source; components never invent a colour or a size.
+
+
+### Prototype verdict — 2026-11-08
+
+The clickable prototype ([#13](https://github.com/mustaphaelou/excel-agent/issues/13)) was reviewed by the dev on 2026-11-08. The validated visual direction is **B — Claude-close**: the warm paper reading surface and Fluent host constraints, with the quieter shell, right-aligned user turns and floating composer trialled in the prototype. This section supersedes the original measurements below where they conflict. The prototype is throwaway; this is the production-facing decision. Source: [`prototype/clickable-sidebar-13`](https://github.com/mustaphaelou/excel-agent/tree/prototype/clickable-sidebar-13/docs/wayfinder/design/13-prototype).
+
+| Element | Validated B — Claude-close | Supersedes |
+| --- | --- | --- |
+| Shell / header | A **46 px whisper topbar**, no permanent hairline: workbook name (11.5/16, truncating), muted file icon, unsaved dot and chevron; history / new chat / settings as **32 px hit targets** drawn as 30 px circles; 8 px side inset. New chat still appears only once there is a conversation. The workbook menu still opens from the name. | The 44 px bordered header and its 32 px square icon buttons. |
+| Transcript / user turn | Assistant stays bubble-free. User prompts are a **right-aligned bubble**, max 88% width, 8/12 px padding, 13.5/20, radius `16px 16px 4px 16px`. Turn gap 18 px. | The full-width tinted user block; the left-aligned reading column. |
+| Empty state | **Centered** composition: 38 px brand mark, serif question at 27/33, description 12.5/19, suggestion rows at 12 px radius, trust line centered. | The left-aligned empty state and 8 px suggestion radius. |
+| Composer | A **floating card**: 8 px side inset, 4 px inner inset, 18 px radius, 1 px `--line` border, soft elevation; 11/12/8/14 px padding; 14/21 input; model chip without the grid glyph; **32 px hit target** send/stop (30 px visual circle). Gated, streaming, read-only and stop behavior are unchanged. | The 10 px composer card with its full-width bottom bar. |
+| Edit card | **14 px radius, no outer border**, soft elevation; 14/13 px header; footer on `--surface`; same expanded-by-default body. The diff, risk notes, per-row inclusion, overwrite acknowledgement, one gate, apply/partial/retry/dismiss semantics are unchanged. | The 10 px bordered card and its footer treatment. |
+| History / settings | Full-height views stay. 8 px outer / 4 px inner inset; **borderless view header**; serif view title at 16/21; same scope control, rows, footer and settings sections. | The bordered 44 px view header and flush body. |
+| Shape / depth | Controls/checkboxes keep 4/6 px radii; **12 px** suggestions/menus, **14 px** cards, **16/4 px** user bubble, **18 px** composer. Hairline first, soft elevation second; no acrylic. | The 4/6/10 px-only radius rule in §3.4. |
+| Action / brand | Claude's `#D97757` is the **brand mark and illustration only**. Filled actions keep #8's `#B55434` with white text (**4.90:1**); citation, warning, danger and success pairs are unchanged. Dark mode keeps the lightened action token with ink text. | Using the brand orange as a filled action colour. |
+
+**What does not change.** One pane per workbook; 380 px default with a stored width; 260–720 px reflow; one column; ribbon + Home > Add-ins + opt-in auto-open; no global shortcut; tool-derived status; inline citation chips with no sources footer; per-workbook history/instructions; full-height History/Settings; no `Claude Log`; one approval gate per turn; per-row inclusion and overwrite acknowledgement; one `Excel.run` / undo group; partial failure with scoped Retry and Dismiss; the complete state matrix, copy deck, keyboard model, focus return, reduced-motion, forced-colors, 200 % zoom and contrast floors. The composer remains visible and explains its gate; the edit card remains the review surface, not a table.
+
+**Implementation.** Production remains React 19 + TypeScript + Vite with CSS custom properties and bundled Source Serif 4; the prototype is not a code source. The two source snapshots for implementation review are the [B review frame](https://raw.githubusercontent.com/mustaphaelou/excel-agent/prototype/clickable-sidebar-13/docs/wayfinder/design/13-prototype/screenshots/claude-review.png) and the [B first-run frame](https://raw.githubusercontent.com/mustaphaelou/excel-agent/prototype/clickable-sidebar-13/docs/wayfinder/design/13-prototype/screenshots/claude-empty.png). Re-run the prototype at 260/380/520/720 in light and dark before changing component geometry.
 
 **The one correction to the ticket body.** The ticket says width and dock state persist in `taskpanes.xml`. The [#6 spike](../../wayfinder/research/06-pane-sideload-spike.md) measured the opposite for this sideload: a saved `width="600"` reopened at the 326 px default, `dockstate` was empty, and `locked` was ignored. The design therefore treats width as a preference that must be re-applied, not state that can be relied on. `Office.extensionLifeCycle.taskpane.setWidth()` is the only width API; there is no `getWidth`.
 
@@ -199,7 +222,7 @@ What is **not** copied:
 | Token | Value | Notes |
 | --- | --- | --- |
 | Space | 2, 4, 8, 12, 16, 24, 32 | 4 px grid; 6 px gaps are allowed only inside a control row |
-| Radius | 4 checkbox/range · 6 button/input · 10 card/composer/user bubble · pill | No 12+ radii inside the pane |
+| Radius | 4 checkbox/range · 6 button/input · 12 suggestion/menu · 14 card · 16/4 user bubble · 18 composer · pill | Amended by #13. No larger radii inside the pane |
 | Border | 1 px | Hairline for grouping; `--line-control` for anything clickable |
 | Elevation 1 | `0 1px 2px rgba(27,26,24,.06), 0 6px 18px rgba(27,26,24,.06)` | Composer, edit card |
 | Elevation 2 | `0 10px 30px rgba(27,26,24,.18), 0 2px 6px rgba(27,26,24,.08)` | Menus, dialogs |
