@@ -399,7 +399,7 @@ The block tier is code execution or file access with no legitimate v1 use. The c
 
 ## 10. Audit
 
-- **Local only.** Append-only records in IndexedDB, keyed by workbook key + conversation id; #11 owns the store, retention, and deletion. No `Claude Log` sheet; Claude's sheet is a workbook write and travels with the file ([teardown](../research/04-claude-sidebar-teardown.md)).
+- **Local only.** Append-only records in the local store — `audit.jsonl`, one line per transition, in the workbook's directory; #11 owns the store, retention and deletion ([11-history-and-instructions.md](11-history-and-instructions.md)). No `Claude Log` sheet; Claude's sheet is a workbook write and travels with the file ([teardown](../research/04-claude-sidebar-teardown.md)).
 - **Written at intent, updated at outcome.** The record is created when the card is rendered and marked `applying` before the first write, so a crash or pane close leaves a trace. No document-close event exists to flush on ([envelope](../research/01-officejs-capability-envelope.md)); transitions are the flush points.
 - **Shape** (v1):
 
