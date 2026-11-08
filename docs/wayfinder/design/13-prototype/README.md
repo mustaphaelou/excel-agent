@@ -47,6 +47,7 @@ At 380 px / 1366 × 768, light:
 
 - [Hybrid — review](screenshots/hybrid-review.png)
 - [Claude-close — first run](screenshots/claude-empty.png)
+- [Claude-close — review](screenshots/claude-review.png)
 - [Fluent-native — review](screenshots/fluent-review.png)
 
 ## What to judge
