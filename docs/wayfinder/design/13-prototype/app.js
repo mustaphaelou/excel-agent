@@ -1525,6 +1525,7 @@ function afterRender() {
   const shouldScrollToCard = state.scrollToCard;
   if (shouldScrollBottom) {
     state.scrollBottom = false;
+    scrollMemory = null;
     requestAnimationFrame(() => {
       const transcript = $("#transcript");
       if (transcript) transcript.scrollTop = transcript.scrollHeight;
@@ -1532,6 +1533,7 @@ function afterRender() {
   }
   if (shouldScrollToCard) {
     state.scrollToCard = false;
+    scrollMemory = null;
     requestAnimationFrame(() => {
       const transcript = $("#transcript");
       const card = $("#editCard");
