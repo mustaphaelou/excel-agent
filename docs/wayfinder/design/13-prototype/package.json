@@ -1,0 +1,8 @@
+{
+  "name": "excel-agent-prototype-13",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node serve.mjs"
+  }
+}
